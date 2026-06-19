@@ -1,65 +1,142 @@
-import Image from "next/image";
+'use client'
+
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { supabase } from '@/lib/supabase'
 
 export default function Home() {
+  const [seasons, setSeasons] = useState([])
+  const [currentSeason, setCurrentSeason] = useState(null)
+  const [showForm, setShowForm] = useState(false)
+  const [newSeasonName, setNewSeasonName] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchSeasons()
+  }, [])
+
+  async function fetchSeasons() {
+    const { data } = await supabase
+      .from('seasons')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (data && data.length > 0) {
+      setSeasons(data)
+      setCurrentSeason(data[0])
+    }
+    setLoading(false)
+  }
+
+  async function createSeason() {
+    if (!newSeasonName.trim()) return
+    const { data } = await supabase
+      .from('seasons')
+      .insert({ name: newSeasonName.trim() })
+      .select()
+      .single()
+    if (data) {
+      setCurrentSeason(data)
+      setSeasons([data, ...seasons])
+      setNewSeasonName('')
+      setShowForm(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-gray-500">読み込み中...</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="max-w-md mx-auto min-h-screen bg-white">
+      {/* ヘッダー */}
+      <header className="bg-gradient-to-r from-green-900 to-green-700 text-white px-4 py-3">
+        <h1 className="text-base font-semibold">⚾ ソフトボール成績記録</h1>
+      </header>
+
+      <div className="p-4">
+        {/* シーズン表示 */}
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+          <p className="text-xs text-gray-500 mb-1">現在のシーズン</p>
+          {currentSeason ? (
+            <div className="flex items-center justify-between">
+              <p className="text-xl font-bold text-green-900">{currentSeason.name}</p>
+              <select
+                className="text-xs border border-gray-300 rounded px-2 py-1"
+                value={currentSeason.id}
+                onChange={(e) => {
+                  const s = seasons.find(s => s.id === e.target.value)
+                  if (s) setCurrentSeason(s)
+                }}
+              >
+                {seasons.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">シーズンがありません</p>
+          )}
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="mt-2 text-xs text-green-700 underline"
+          >
+            ＋ 新しいシーズンを追加
+          </button>
+          {showForm && (
+            <div className="mt-2 flex gap-2">
+              <input
+                type="text"
+                value={newSeasonName}
+                onChange={(e) => setNewSeasonName(e.target.value)}
+                placeholder="例: 2026年春季リーグ"
+                className="flex-1 text-sm border border-gray-300 rounded px-3 py-2"
+                onKeyDown={(e) => e.key === 'Enter' && createSeason()}
+              />
+              <button
+                onClick={createSeason}
+                className="bg-green-700 text-white text-sm px-3 py-2 rounded font-semibold"
+              >
+                追加
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* メニュー */}
+        {currentSeason ? (
+          <div className="flex flex-col gap-3">
+            <Link
+              href={`/players?season=${currentSeason.id}`}
+              className="block bg-white border border-gray-200 rounded-xl p-4 hover:bg-green-50 transition-colors"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              <p className="font-semibold text-base">👥 選手管理</p>
+              <p className="text-sm text-gray-500 mt-1">登録・編集</p>
+            </Link>
+            <Link
+              href={`/games?season=${currentSeason.id}`}
+              className="block bg-white border border-gray-200 rounded-xl p-4 hover:bg-green-50 transition-colors"
             >
-              Learning
-            </a>{" "}
-            center.
+              <p className="font-semibold text-base">📋 試合管理</p>
+              <p className="text-sm text-gray-500 mt-1">試合一覧・新規作成</p>
+            </Link>
+            <Link
+              href={`/stats?season=${currentSeason.id}`}
+              className="block bg-white border border-gray-200 rounded-xl p-4 hover:bg-green-50 transition-colors"
+            >
+              <p className="font-semibold text-base">📊 成績一覧</p>
+              <p className="text-sm text-gray-500 mt-1">シーズン通算・CSV出力</p>
+            </Link>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 text-center mt-8">
+            まずシーズンを追加してください
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        )}
+      </div>
     </div>
-  );
+  )
 }
