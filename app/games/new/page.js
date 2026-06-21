@@ -1,13 +1,12 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
+import { Suspense } from 'react'
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
-export default function NewGamePage() {
+function NewGameContent() {
   const searchParams = useSearchParams()
   const seasonId = searchParams.get('season')
   const router = useRouter()
@@ -15,7 +14,7 @@ export default function NewGamePage() {
   const [players, setPlayers] = useState([])
   const [opponent, setOpponent] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  const [lineup, setLineup] = useState([]) // { playerId, battingOrder, position, isStarter }
+  const [lineup, setLineup] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -100,21 +99,13 @@ export default function NewGamePage() {
 
       <div className="p-4">
         <label className="block text-xs text-gray-600 mb-1">試合日 <span className="text-red-500">*</span></label>
-        <input
-          type="date"
-          value={date}
-          onChange={e => setDate(e.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3"
-        />
+        <input type="date" value={date} onChange={e => setDate(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3" />
 
         <label className="block text-xs text-gray-600 mb-1">対戦相手 <span className="text-red-500">*</span></label>
-        <input
-          type="text"
-          value={opponent}
-          onChange={e => setOpponent(e.target.value)}
+        <input type="text" value={opponent} onChange={e => setOpponent(e.target.value)}
           placeholder="例: ライオンズ"
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
-        />
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4" />
 
         <h2 className="font-semibold text-sm mb-1">スタメン・打順設定</h2>
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3 text-xs text-gray-600">
@@ -122,9 +113,7 @@ export default function NewGamePage() {
         </div>
 
         {players.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">
-            先に選手を登録してください
-          </p>
+          <p className="text-sm text-gray-400 text-center py-4">先に選手を登録してください</p>
         ) : (
           <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
             <div className="grid grid-cols-12 bg-gray-50 px-3 py-2 text-xs text-gray-500 font-semibold">
@@ -138,12 +127,9 @@ export default function NewGamePage() {
               return (
                 <div key={player.id} className={`grid grid-cols-12 items-center px-3 py-2 text-sm ${i > 0 ? 'border-t border-gray-100' : ''} ${l?.isStarter ? 'bg-green-50' : ''}`}>
                   <div className="col-span-1">
-                    <input
-                      type="checkbox"
-                      checked={l?.isStarter || false}
+                    <input type="checkbox" checked={l?.isStarter || false}
                       onChange={() => toggleStarter(player.id)}
-                      className="w-4 h-4 accent-green-700"
-                    />
+                      className="w-4 h-4 accent-green-700" />
                   </div>
                   <div className="col-span-5">
                     <span className="font-semibold text-xs">#{player.number}</span>
@@ -151,23 +137,15 @@ export default function NewGamePage() {
                   </div>
                   <div className="col-span-3">
                     {l?.isStarter && (
-                      <input
-                        type="number"
-                        min="1"
-                        max="20"
-                        value={l?.battingOrder || ''}
+                      <input type="number" min="1" max="20" value={l?.battingOrder || ''}
                         onChange={e => setOrder(player.id, e.target.value)}
-                        className="w-12 border border-gray-300 rounded px-1 py-1 text-xs"
-                      />
+                        className="w-12 border border-gray-300 rounded px-1 py-1 text-xs" />
                     )}
                   </div>
                   <div className="col-span-3">
                     {l?.isStarter && (
-                      <select
-                        value={l?.position || ''}
-                        onChange={e => setPosition(player.id, e.target.value)}
-                        className="w-full border border-gray-300 rounded px-1 py-1 text-xs"
-                      >
+                      <select value={l?.position || ''} onChange={e => setPosition(player.id, e.target.value)}
+                        className="w-full border border-gray-300 rounded px-1 py-1 text-xs">
                         <option value="">-</option>
                         {positions.map(p => <option key={p} value={p}>{p}</option>)}
                       </select>
@@ -179,14 +157,19 @@ export default function NewGamePage() {
           </div>
         )}
 
-        <button
-          onClick={createGame}
-          disabled={saving}
-          className="w-full bg-green-700 text-white font-semibold py-3 rounded-xl disabled:opacity-50"
-        >
+        <button onClick={createGame} disabled={saving}
+          className="w-full bg-green-700 text-white font-semibold py-3 rounded-xl disabled:opacity-50">
           {saving ? '作成中...' : '試合を開始'}
         </button>
       </div>
     </div>
+  )
+}
+
+export default function NewGamePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">読み込み中...</p></div>}>
+      <NewGameContent />
+    </Suspense>
   )
 }

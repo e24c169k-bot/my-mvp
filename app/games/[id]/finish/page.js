@@ -1,13 +1,12 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
+import { Suspense } from 'react'
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
-export default function FinishPage() {
+function FinishContent() {
   const { id: gameId } = useParams()
   const searchParams = useSearchParams()
   const seasonId = searchParams.get('season')
@@ -179,5 +178,13 @@ export default function FinishPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function FinishPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">読み込み中...</p></div>}>
+      <FinishContent />
+    </Suspense>
   )
 }

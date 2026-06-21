@@ -1,13 +1,12 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
+import { Suspense } from 'react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
-export default function StatsPage() {
+function StatsContent() {
   const searchParams = useSearchParams()
   const seasonId = searchParams.get('season')
   const [tab, setTab] = useState('batting')
@@ -227,5 +226,13 @@ export default function StatsPage() {
         </button>
       </div>
     </div>
+  )
+}
+
+export default function StatsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">読み込み中...</p></div>}>
+      <StatsContent />
+    </Suspense>
   )
 }

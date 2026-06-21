@@ -1,7 +1,6 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
+import { Suspense } from 'react'
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -14,7 +13,7 @@ const OUT_RESULTS = ['ゴロアウト', 'フライアウト', 'ライナーア�
 const ADVANCE_REASONS = ['盗塁', 'タッチアップ', 'パスボール', '暴投', 'エラー・野選', 'その他']
 const BASES = ['1塁', '2塁', '3塁', '本塁']
 
-export default function RecordPage() {
+function RecordContent() {
   const { id: gameId } = useParams()
   const searchParams = useSearchParams()
   const seasonId = searchParams.get('season')
@@ -760,5 +759,13 @@ export default function RecordPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function RecordPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">読み込み中...</p></div>}>
+      <RecordContent />
+    </Suspense>
   )
 }

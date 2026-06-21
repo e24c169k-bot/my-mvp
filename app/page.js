@@ -1,12 +1,11 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
+import { Suspense } from 'react'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
-export default function Home() {
+function HomeContent() {
   const [seasons, setSeasons] = useState([])
   const [currentSeason, setCurrentSeason] = useState(null)
   const [showForm, setShowForm] = useState(false)
@@ -140,5 +139,13 @@ export default function Home() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">読み込み中...</p></div>}>
+      <HomeContent />
+    </Suspense>
   )
 }
