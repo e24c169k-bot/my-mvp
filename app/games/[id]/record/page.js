@@ -595,6 +595,29 @@ function RecordContent() {
               <div className="flex gap-1">{[0, 1].map((i) => <div key={i} className={`w-3.5 h-3.5 rounded-full border-2 ${i < outs ? 'bg-red-400 border-red-300' : 'border-white/40'}`} />)}</div>
             </div>
           </div>
+
+          <div className="relative w-32 h-32 mx-auto mb-2">
+            <div className="absolute inset-4 border-2 border-white/30 rotate-45 rounded-sm" />
+            <div
+              className={`absolute w-6 h-6 border-2 rotate-45 rounded-sm ${runners['2塁'] ? 'bg-yellow-400 border-yellow-200' : 'bg-white/10 border-white/40'}`}
+              style={{ top: 2, left: '50%', marginLeft: -12 }}
+              title={runners['2塁'] ? '2塁: 走者あり' : '2塁: 走者なし'}
+            />
+            <div
+              className={`absolute w-6 h-6 border-2 rotate-45 rounded-sm ${runners['1塁'] ? 'bg-yellow-400 border-yellow-200' : 'bg-white/10 border-white/40'}`}
+              style={{ top: '50%', marginTop: -12, right: 2 }}
+              title={runners['1塁'] ? '1塁: 走者あり' : '1塁: 走者なし'}
+            />
+            <div
+              className={`absolute w-6 h-6 border-2 rotate-45 rounded-sm ${runners['3塁'] ? 'bg-yellow-400 border-yellow-200' : 'bg-white/10 border-white/40'}`}
+              style={{ top: '50%', marginTop: -12, left: 2 }}
+              title={runners['3塁'] ? '3塁: 走者あり' : '3塁: 走者なし'}
+            />
+            <div
+              className="absolute w-5 h-5 bg-white/20 border-2 border-white/40"
+              style={{ bottom: 2, left: '50%', marginLeft: -10, clipPath: 'polygon(50% 0%, 0% 38%, 0% 100%, 100% 100%, 100% 38%)' }}
+            />
+          </div>
         </div>
 
         {panel === 'main' && (
