@@ -72,7 +72,7 @@ function RecordContent() {
 
   const batter = starters[batterIndex % (starters.length || 1)]
   const batterPlayer = lineup.find((l) => l.player_id === batter?.playerId)
-  const pitcher = lineup.find((l) => l.player_id === pitcherId)
+  const teamPitcher = lineup.find((l) => l.player_id === pitcherId)
   const catcherEntry = lineup.find((l) => l.position === 'C')
 
   useEffect(() => {
@@ -232,7 +232,7 @@ function RecordContent() {
     setSubTarget(null)
   }
 
-  const hasRunnerP = pitcher && Object.values(runners).some((r) => r === pitcherId)
+  const hasRunnerP = teamPitcher && Object.values(runners).some((r) => r === pitcherId)
   const hasRunnerC = catcherEntry && Object.values(runners).some((r) => r === catcherEntry.player_id)
   const canTemporary = outs === 2 && (hasRunnerP || hasRunnerC)
 
@@ -255,7 +255,8 @@ function RecordContent() {
         inning,
         inning_half: inningHalf,
         batter_id: batter?.playerId || null,
-        pitcher_id: pitcherId,
+        // This screen records our offensive events; opponent pitcher is not tracked yet.
+        pitcher_id: null,
         pitch_type: pitchType,
         result,
         advance_reason: advReason || null
@@ -576,8 +577,8 @@ function RecordContent() {
               <div className="font-bold">{batterPlayer?.players?.name || '—'} #{batterPlayer?.players?.number || '-'}</div>
             </div>
             <div className="text-right">
-              <div className="text-green-300 text-xs">投手</div>
-              <div className="font-bold">{pitcher?.players?.name || '—'}</div>
+              <div className="text-green-300 text-xs">相手投手</div>
+              <div className="font-bold">未入力</div>
             </div>
           </div>
 
