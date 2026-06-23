@@ -73,7 +73,14 @@ function HomeContent() {
   }
 
   async function createSeason() {
-    if (!newSeasonName.trim() || !teamId) return
+    if (!newSeasonName.trim()) {
+      setErrorMsg('シーズン名を入力してください')
+      return
+    }
+    if (!teamId) {
+      setErrorMsg('チーム情報の読み込みに失敗しました。再読み込みしてください。')
+      return
+    }
     setErrorMsg('')
     const { data, error } = await supabase
       .from('seasons')
@@ -163,6 +170,7 @@ function HomeContent() {
               />
               <button
                 onClick={createSeason}
+                disabled={!teamId}
                 className="bg-green-700 text-white text-sm px-3 py-2 rounded font-semibold"
               >
                 追加
