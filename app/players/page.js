@@ -5,30 +5,56 @@ import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { getClientSession, getUserTeam } from '@/lib/team-client'
 
 function PlayersContent() {
   const searchParams = useSearchParams()
   const seasonId = searchParams.get('season')
+  const teamIdParam = searchParams.get('team')
   const router = useRouter()
 
   const [players, setPlayers] = useState([])
+  const [teamId, setTeamId] = useState(teamIdParam || null)
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editPlayer, setEditPlayer] = useState(null)
   const [form, setForm] = useState({ name: '', number: '', position: '' })
+  const [errorMsg, setErrorMsg] = useState('')
 
   const positions = ['投手', '捕手', '一塁手', '二塁手', '三塁手', '遊撃手', '左翼手', '中堅手', '右翼手', 'DH']
 
   useEffect(() => {
-    if (seasonId) fetchPlayers()
-  }, [seasonId])
+    initialize()
+  }, [seasonId, teamIdParam])
 
-  async function fetchPlayers() {
-    const { data } = await supabase
+  async function initialize() {
+    const { user } = await getClientSession()
+    if (!user) {
+      router.push('/auth')
+      return
+    }
+    const { team } = await getUserTeam(user.id)
+    if (!team?.team_id) {
+      router.push('/onboarding')
+      return
+    }
+    setTeamId(team.team_id)
+    if (seasonId) fetchPlayers(team.team_id)
+  }
+
+  async function fetchPlayers(currentTeamId) {
+    setErrorMsg('')
+    const { data, error } = await supabase
       .from('players')
       .select('*')
       .eq('season_id', seasonId)
+      .eq('team_id', currentTeamId)
       .order('number', { ascending: true })
+    if (error) {
+      setErrorMsg(error.message)
+      setLoading(false)
+      return
+    }
     setPlayers(data || [])
     setLoading(false)
   }
@@ -46,21 +72,37 @@ function PlayersContent() {
   }
 
   async function savePlayer() {
-    if (!form.name.trim()) return
+    if (!form.name.trim() || !teamId) return
+    setErrorMsg('')
     if (editPlayer) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('players')
         .update({ name: form.name.trim(), number: form.number.trim(), position: form.position })
         .eq('id', editPlayer.id)
+        .eq('team_id', teamId)
         .select()
         .single()
+      if (error) {
+        setErrorMsg(error.message)
+        return
+      }
       setPlayers(players.map(p => p.id === editPlayer.id ? data : p))
     } else {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('players')
-        .insert({ season_id: seasonId, name: form.name.trim(), number: form.number.trim(), position: form.position })
+        .insert({
+          season_id: seasonId,
+          team_id: teamId,
+          name: form.name.trim(),
+          number: form.number.trim(),
+          position: form.position
+        })
         .select()
         .single()
+      if (error) {
+        setErrorMsg(error.message)
+        return
+      }
       setPlayers([...players, data])
     }
     setShowForm(false)
@@ -69,7 +111,12 @@ function PlayersContent() {
 
   async function deletePlayer(id) {
     if (!confirm('この選手を削除しますか？')) return
-    await supabase.from('players').delete().eq('id', id)
+    setErrorMsg('')
+    const { error } = await supabase.from('players').delete().eq('id', id).eq('team_id', teamId)
+    if (error) {
+      setErrorMsg(error.message)
+      return
+    }
     setPlayers(players.filter(p => p.id !== id))
   }
 
@@ -79,10 +126,12 @@ function PlayersContent() {
     <div className="max-w-md mx-auto min-h-screen bg-white">
       <header className="bg-gradient-to-r from-green-900 to-green-700 text-white px-4 py-3 flex items-center justify-between">
         <h1 className="text-base font-semibold">👥 選手一覧</h1>
-        <Link href={`/?season=${seasonId}`} className="text-xs text-green-200">← ホーム</Link>
+        <Link href={`/?season=${seasonId}&team=${teamId}`} className="text-xs text-green-200">← ホーム</Link>
       </header>
 
       <div className="p-4">
+        {errorMsg && <p className="text-sm text-red-600 mb-3">{errorMsg}</p>}
+
         <button
           onClick={openAdd}
           className="w-full bg-green-700 text-white font-semibold py-3 rounded-xl mb-4"

@@ -5,31 +5,57 @@ import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { getClientSession, getUserTeam } from '@/lib/team-client'
 
 function NewGameContent() {
   const searchParams = useSearchParams()
   const seasonId = searchParams.get('season')
+  const teamIdParam = searchParams.get('team')
   const router = useRouter()
 
   const [players, setPlayers] = useState([])
+  const [teamId, setTeamId] = useState(teamIdParam || null)
   const [opponent, setOpponent] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [lineup, setLineup] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
 
   const positions = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH']
 
   useEffect(() => {
-    if (seasonId) fetchPlayers()
-  }, [seasonId])
+    initialize()
+  }, [seasonId, teamIdParam])
 
-  async function fetchPlayers() {
-    const { data } = await supabase
+  async function initialize() {
+    const { user } = await getClientSession()
+    if (!user) {
+      router.push('/auth')
+      return
+    }
+    const { team } = await getUserTeam(user.id)
+    if (!team?.team_id) {
+      router.push('/onboarding')
+      return
+    }
+    setTeamId(team.team_id)
+    if (seasonId) fetchPlayers(team.team_id)
+  }
+
+  async function fetchPlayers(currentTeamId) {
+    setErrorMsg('')
+    const { data, error } = await supabase
       .from('players')
       .select('*')
       .eq('season_id', seasonId)
+      .eq('team_id', currentTeamId)
       .order('number')
+    if (error) {
+      setErrorMsg(error.message)
+      setLoading(false)
+      return
+    }
     setPlayers(data || [])
     setLineup((data || []).map((p, i) => ({
       playerId: p.id,
@@ -59,27 +85,58 @@ function NewGameContent() {
   }
 
   async function createGame() {
-    if (!opponent.trim()) { alert('対戦相手を入力してください'); return }
+    if (!opponent.trim() || !teamId) { alert('対戦相手を入力してください'); return }
     const starters = lineup.filter(l => l.isStarter)
     if (starters.length === 0) { alert('スタメンを1人以上選択してください'); return }
     setSaving(true)
+    setErrorMsg('')
 
-    const { data: game } = await supabase
+    const initialState = {
+      inning: 1,
+      inningHalf: 'top',
+      balls: 0,
+      strikes: 0,
+      outs: 0,
+      runners: { '1塁': null, '2塁': null, '3塁': null },
+      batterIndex: 0
+    }
+
+    const { data: game, error: gameError } = await supabase
       .from('games')
-      .insert({ season_id: seasonId, opponent: opponent.trim(), date, status: 'active', score_us: 0, score_them: 0 })
+      .insert({
+        season_id: seasonId,
+        team_id: teamId,
+        opponent: opponent.trim(),
+        date,
+        status: 'active',
+        score_us: 0,
+        score_them: 0,
+        state_json: initialState
+      })
       .select()
       .single()
+    if (gameError) {
+      setErrorMsg(gameError.message)
+      setSaving(false)
+      return
+    }
 
     if (game) {
       const lineupData = starters.map(l => ({
         game_id: game.id,
+        team_id: teamId,
         player_id: l.playerId,
         batting_order: l.battingOrder,
         position: l.position,
         is_starter: true
       }))
-      await supabase.from('lineups').insert(lineupData)
-      router.push(`/games/${game.id}/record?season=${seasonId}`)
+      const { error: lineupError } = await supabase.from('lineups').insert(lineupData)
+      if (lineupError) {
+        setErrorMsg(lineupError.message)
+        setSaving(false)
+        return
+      }
+      router.push(`/games/${game.id}/record?season=${seasonId}&team=${teamId}`)
     }
     setSaving(false)
   }
@@ -94,10 +151,11 @@ function NewGameContent() {
     <div className="max-w-md mx-auto min-h-screen bg-white">
       <header className="bg-gradient-to-r from-green-900 to-green-700 text-white px-4 py-3 flex items-center justify-between">
         <h1 className="text-base font-semibold">試合作成・スタメン設定</h1>
-        <Link href={`/games?season=${seasonId}`} className="text-xs text-green-200">← 戻る</Link>
+        <Link href={`/games?season=${seasonId}&team=${teamId}`} className="text-xs text-green-200">← 戻る</Link>
       </header>
 
       <div className="p-4">
+        {errorMsg && <p className="text-sm text-red-600 mb-3">{errorMsg}</p>}
         <label className="block text-xs text-gray-600 mb-1">試合日 <span className="text-red-500">*</span></label>
         <input type="date" value={date} onChange={e => setDate(e.target.value)}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3" />
