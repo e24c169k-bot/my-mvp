@@ -39,6 +39,7 @@ function RecordContent() {
   const [scoreUs, setScoreUs] = useState(0)
   const [scoreThem, setScoreThem] = useState(0)
   const [lastPitchId, setLastPitchId] = useState(null)
+  const [lastAction, setLastAction] = useState(null)
   const [opponentRunnerSeq, setOpponentRunnerSeq] = useState(1)
   const [activeBatterRunnerId, setActiveBatterRunnerId] = useState('')
   const halfSwitchingRef = useRef(false)
@@ -238,6 +239,47 @@ function RecordContent() {
     if (error) setErrorMsg(error.message)
   }
 
+  function snapshotState() {
+    return {
+      inning,
+      inningHalf,
+      usBattingTurn,
+      balls,
+      strikes,
+      outs,
+      runners: { ...runners },
+      batterIndex,
+      scoreUs,
+      scoreThem,
+      lastPitchId,
+      activeBatterRunnerId
+    }
+  }
+
+  function restoreSnapshot(snapshot) {
+    setInning(snapshot.inning)
+    setInningHalf(snapshot.inningHalf)
+    setUsBattingTurn(snapshot.usBattingTurn)
+    setBalls(snapshot.balls)
+    setStrikes(snapshot.strikes)
+    setOuts(snapshot.outs)
+    setRunners(snapshot.runners)
+    setBatterIndex(snapshot.batterIndex)
+    setScoreUs(snapshot.scoreUs)
+    setScoreThem(snapshot.scoreThem)
+    setLastPitchId(snapshot.lastPitchId || null)
+    setActiveBatterRunnerId(snapshot.activeBatterRunnerId || '')
+    setPanel('main')
+    setSelectedPitch('')
+    setSelectedPos('')
+    setSelectedResult('')
+    setAdvanceKind('')
+    setAdvanceReason('')
+    setAdvanceRunner('')
+    setAdvanceTo('')
+    setScoreRunners([])
+  }
+
   function createOpponentRunnerId() {
     const id = `opp-${inning}-${inningHalf}-${opponentRunnerSeq}`
     setOpponentRunnerSeq((prev) => prev + 1)
@@ -374,15 +416,20 @@ function RecordContent() {
   async function savePA(result, positionHitTo) {
     if (!isOurOffense) return
     if (!teamId) return
-    const { error } = await supabase.from('plate_appearances').insert({
-      game_id: gameId,
-      team_id: teamId,
-      player_id: batter?.playerId || null,
-      inning,
-      result,
-      position_hit_to: positionHitTo || null
-    })
+    const { data, error } = await supabase
+      .from('plate_appearances')
+      .insert({
+        game_id: gameId,
+        team_id: teamId,
+        player_id: batter?.playerId || null,
+        inning,
+        result,
+        position_hit_to: positionHitTo || null
+      })
+      .select('id')
+      .single()
     if (error) setErrorMsg(error.message)
+    return data?.id || null
   }
 
   function nextBatter() {
@@ -430,6 +477,11 @@ function RecordContent() {
   }
 
   async function selectPitch(pitch) {
+    const action = {
+      before: snapshotState(),
+      pitchIds: [],
+      paIds: []
+    }
     setSelectedPitch(pitch)
     setErrorMsg('')
     setActiveBatterRunnerId('')
@@ -439,34 +491,42 @@ function RecordContent() {
     }
     if (pitch === 'ボーク') {
       setAdvanceReason('ボーク')
-      await savePitch(pitch, 'ボーク', 'ボーク')
+      const pitchId = await savePitch(pitch, 'ボーク', 'ボーク')
+      if (pitchId) action.pitchIds.push(pitchId)
       setPanel('error')
+      setLastAction(action)
       return
     }
 
     if (['見逃しS', '空振りS', 'バント空振'].includes(pitch)) {
       const newS = strikes + 1
       if (newS >= 3) {
-        await savePitch(pitch, '三振', null)
-        await savePA('三振', null)
+        const pitchId = await savePitch(pitch, '三振', null)
+        if (pitchId) action.pitchIds.push(pitchId)
+        const paId = await savePA('三振', null)
+        if (paId) action.paIds.push(paId)
         const newOuts = outs + 1
         const nextIndex = nextBatter()
         setOuts(newOuts)
         persistGameState({ outs: newOuts, balls: 0, strikes: 0, batterIndex: nextIndex })
       } else {
         setStrikes(newS)
-        await savePitch(pitch, null, null)
+        const pitchId = await savePitch(pitch, null, null)
+        if (pitchId) action.pitchIds.push(pitchId)
         persistGameState({ strikes: newS })
       }
       setPanel('error')
+      setLastAction(action)
       return
     }
 
     if (pitch === 'ボール') {
       const newB = balls + 1
       if (newB >= 3) {
-        await savePitch(pitch, '四球', null)
-        await savePA('四球', null)
+        const pitchId = await savePitch(pitch, '四球', null)
+        if (pitchId) action.pitchIds.push(pitchId)
+        const paId = await savePA('四球', null)
+        if (paId) action.paIds.push(paId)
         const batterRunnerId = isOurOffense ? batter?.playerId : createOpponentRunnerId()
         setActiveBatterRunnerId(batterRunnerId || '')
         const { nextRunners, runsScored } = forceAdvanceOnWalk(runners, batterRunnerId)
@@ -485,16 +545,20 @@ function RecordContent() {
         })
       } else {
         setBalls(newB)
-        await savePitch(pitch, null, null)
+        const pitchId = await savePitch(pitch, null, null)
+        if (pitchId) action.pitchIds.push(pitchId)
         persistGameState({ balls: newB })
       }
       setPanel('error')
+      setLastAction(action)
       return
     }
 
     if (['申告敬遠', 'デッドボール', '打撃妨害'].includes(pitch)) {
-      await savePitch(pitch, pitch, null)
-      await savePA(pitch, null)
+      const pitchId = await savePitch(pitch, pitch, null)
+      if (pitchId) action.pitchIds.push(pitchId)
+      const paId = await savePA(pitch, null)
+      if (paId) action.paIds.push(paId)
       const batterRunnerId = isOurOffense ? batter?.playerId : createOpponentRunnerId()
       setActiveBatterRunnerId(batterRunnerId || '')
       const { nextRunners, runsScored } = forceAdvanceOnWalk(runners, batterRunnerId)
@@ -512,27 +576,33 @@ function RecordContent() {
         batterIndex: nextIndex
       })
       setPanel('error')
+      setLastAction(action)
       return
     }
 
     if (pitch === 'ファウル' || pitch === 'バントF') {
       // Two-strike bunt foul is an automatic strikeout.
       if (pitch === 'バントF' && strikes >= 2) {
-        await savePitch(pitch, '三振', null)
-        await savePA('三振', null)
+        const pitchId = await savePitch(pitch, '三振', null)
+        if (pitchId) action.pitchIds.push(pitchId)
+        const paId = await savePA('三振', null)
+        if (paId) action.paIds.push(paId)
         const newOuts = outs + 1
         const nextIndex = nextBatter()
         setOuts(newOuts)
         persistGameState({ outs: newOuts, balls: 0, strikes: 0, batterIndex: nextIndex })
         setPanel('error')
+        setLastAction(action)
         return
       }
 
       const nextStrikes = strikes < 2 ? strikes + 1 : strikes
       setStrikes(nextStrikes)
-      await savePitch(pitch, null, null)
+      const pitchId = await savePitch(pitch, null, null)
+      if (pitchId) action.pitchIds.push(pitchId)
       persistGameState({ strikes: nextStrikes })
       setPanel('error')
+      setLastAction(action)
       return
     }
   }
@@ -556,8 +626,15 @@ function RecordContent() {
   }
 
   async function applyResult(res, finalRes) {
-    await savePitch('ヒッティング', finalRes, null)
-    await savePA(finalRes, selectedPos)
+    const action = {
+      before: snapshotState(),
+      pitchIds: [],
+      paIds: []
+    }
+    const pitchId = await savePitch('ヒッティング', finalRes, null)
+    if (pitchId) action.pitchIds.push(pitchId)
+    const paId = await savePA(finalRes, selectedPos)
+    if (paId) action.paIds.push(paId)
 
     setBalls(0)
     setStrikes(0)
@@ -596,6 +673,7 @@ function RecordContent() {
       })
     }
     setPanel('error')
+    setLastAction(action)
   }
 
   function startAdvanceFlow(kind) {
@@ -707,10 +785,70 @@ function RecordContent() {
     setPanel('main')
   }
 
-  async function addOpponentScore() {
-    const nextScoreThem = scoreThem + 1
-    setScoreThem(nextScoreThem)
-    await persistGameState({ scoreThem: nextScoreThem })
+  async function undoLastInput() {
+    if (!lastAction || !teamId) return
+    setErrorMsg('')
+
+    if (lastAction.pitchIds.length > 0) {
+      const { error } = await supabase
+        .from('runner_advances')
+        .delete()
+        .in('pitch_id', lastAction.pitchIds)
+        .eq('team_id', teamId)
+      if (error) {
+        setErrorMsg(error.message)
+        return
+      }
+    }
+
+    if (lastAction.paIds.length > 0) {
+      const { error } = await supabase
+        .from('plate_appearances')
+        .delete()
+        .in('id', lastAction.paIds)
+        .eq('team_id', teamId)
+      if (error) {
+        setErrorMsg(error.message)
+        return
+      }
+    }
+
+    if (lastAction.pitchIds.length > 0) {
+      const { error } = await supabase
+        .from('pitches')
+        .delete()
+        .in('id', lastAction.pitchIds)
+        .eq('team_id', teamId)
+      if (error) {
+        setErrorMsg(error.message)
+        return
+      }
+    }
+
+    restoreSnapshot(lastAction.before)
+    const { error: gameError } = await supabase
+      .from('games')
+      .update({
+        score_us: lastAction.before.scoreUs,
+        score_them: lastAction.before.scoreThem,
+        state_json: {
+          inning: lastAction.before.inning,
+          inningHalf: lastAction.before.inningHalf,
+          usBattingTurn: lastAction.before.usBattingTurn,
+          balls: lastAction.before.balls,
+          strikes: lastAction.before.strikes,
+          outs: lastAction.before.outs,
+          runners: lastAction.before.runners,
+          batterIndex: lastAction.before.batterIndex
+        }
+      })
+      .eq('id', gameId)
+      .eq('team_id', teamId)
+    if (gameError) {
+      setErrorMsg(gameError.message)
+      return
+    }
+    setLastAction(null)
   }
 
   const runnerList = Object.entries(runners).filter(([, id]) => id)
@@ -829,7 +967,13 @@ function RecordContent() {
             )}
 
             <div className="flex gap-2 mt-4">
-              <button onClick={addOpponentScore} className="flex-1 py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-700">相手 ＋1点</button>
+              <button
+                onClick={undoLastInput}
+                disabled={!lastAction}
+                className="flex-1 py-2 border-2 border-amber-500 text-amber-700 rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                1つ戻す
+              </button>
               <Link href={`/games/${gameId}/finish?season=${seasonId}&team=${teamId}`} className="flex-1 py-2 bg-red-700 text-white rounded-lg text-sm font-semibold text-center">試合終了へ</Link>
             </div>
           </div>
