@@ -124,12 +124,43 @@ function RecordContent() {
       return
     }
 
+    let normalizedLineup = l || []
+
+    // Backfill bench options for old games that stored only starters.
+    if (!normalizedLineup.some((x) => !x.is_starter) && seasonId) {
+      const starterIds = new Set(normalizedLineup.map((x) => x.player_id))
+      const { data: seasonPlayers, error: seasonPlayersError } = await supabase
+        .from('players')
+        .select('*')
+        .eq('season_id', seasonId)
+        .eq('team_id', team.team_id)
+        .order('number', { ascending: true })
+      if (seasonPlayersError) {
+        setErrorMsg(seasonPlayersError.message)
+        setLoading(false)
+        return
+      }
+      const benchBackfill = (seasonPlayers || [])
+        .filter((p) => !starterIds.has(p.id))
+        .map((p, i) => ({
+          id: `bench-${p.id}`,
+          game_id: gameId,
+          team_id: team.team_id,
+          player_id: p.id,
+          batting_order: 100 + i,
+          position: '',
+          is_starter: false,
+          players: p
+        }))
+      normalizedLineup = [...normalizedLineup, ...benchBackfill]
+    }
+
     setGame(g)
-    setLineup(l || [])
+    setLineup(normalizedLineup)
     setScoreUs(g?.score_us || 0)
     setScoreThem(g?.score_them || 0)
 
-    const starterList = (l || []).filter((x) => x.is_starter).sort((a, b) => a.batting_order - b.batting_order)
+    const starterList = normalizedLineup.filter((x) => x.is_starter).sort((a, b) => a.batting_order - b.batting_order)
     setActiveBatters(
       starterList.map((s) => ({
         battingOrder: s.batting_order,
@@ -139,7 +170,7 @@ function RecordContent() {
       }))
     )
 
-    const pitcherEntry = (l || []).find((x) => x.position === 'P')
+    const pitcherEntry = normalizedLineup.find((x) => x.position === 'P')
     if (pitcherEntry) setPitcherId(pitcherEntry.player_id)
 
     const state = g?.state_json || {}

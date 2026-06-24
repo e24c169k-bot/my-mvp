@@ -122,13 +122,14 @@ function NewGameContent() {
     }
 
     if (game) {
-      const lineupData = starters.map(l => ({
+      // Save both starters and bench players so substitutions can use bench entries.
+      const lineupData = lineup.map(l => ({
         game_id: game.id,
         team_id: teamId,
         player_id: l.playerId,
-        batting_order: l.battingOrder,
-        position: l.position,
-        is_starter: true
+        batting_order: l.battingOrder || 0,
+        position: l.isStarter ? l.position : '',
+        is_starter: l.isStarter
       }))
       const { error: lineupError } = await supabase.from('lineups').insert(lineupData)
       if (lineupError) {
