@@ -94,6 +94,20 @@ function RecordContent() {
     }
   }, [outs])
 
+  useEffect(() => {
+    // Always return to the main pitch-result panel after half-inning switch.
+    setPanel('main')
+    setSelectedPitch('')
+    setSelectedPos('')
+    setSelectedResult('')
+    setAdvanceKind('')
+    setAdvanceReason('')
+    setAdvanceRunner('')
+    setAdvanceTo('')
+    setScoreRunners([])
+    setActiveBatterRunnerId('')
+  }, [inning, inningHalf])
+
   async function initialize() {
     setLoading(true)
     setErrorMsg('')
