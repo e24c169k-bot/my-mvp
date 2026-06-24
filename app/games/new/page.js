@@ -17,6 +17,7 @@ function NewGameContent() {
   const [teamId, setTeamId] = useState(teamIdParam || null)
   const [opponent, setOpponent] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [battingTurn, setBattingTurn] = useState('first') // first | second
   const [lineup, setLineup] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -93,12 +94,13 @@ function NewGameContent() {
 
     const initialState = {
       inning: 1,
-      inningHalf: 'top',
+      inningHalf: battingTurn === 'first' ? 'top' : 'bottom',
       balls: 0,
       strikes: 0,
       outs: 0,
       runners: { '1塁': null, '2塁': null, '3塁': null },
-      batterIndex: 0
+      batterIndex: 0,
+      usBattingTurn: battingTurn
     }
 
     const { data: game, error: gameError } = await supabase
@@ -165,6 +167,24 @@ function NewGameContent() {
         <input type="text" value={opponent} onChange={e => setOpponent(e.target.value)}
           placeholder="例: ライオンズ"
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4" />
+
+        <label className="block text-xs text-gray-600 mb-1">攻撃順 <span className="text-red-500">*</span></label>
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setBattingTurn('first')}
+            className={`py-2 rounded-lg border-2 text-sm font-semibold ${battingTurn === 'first' ? 'bg-green-700 text-white border-green-700' : 'bg-white text-gray-700 border-gray-300'}`}
+          >
+            先攻
+          </button>
+          <button
+            type="button"
+            onClick={() => setBattingTurn('second')}
+            className={`py-2 rounded-lg border-2 text-sm font-semibold ${battingTurn === 'second' ? 'bg-green-700 text-white border-green-700' : 'bg-white text-gray-700 border-gray-300'}`}
+          >
+            後攻
+          </button>
+        </div>
 
         <h2 className="font-semibold text-sm mb-1">スタメン・打順設定</h2>
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3 text-xs text-gray-600">
