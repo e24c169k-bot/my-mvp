@@ -13,6 +13,7 @@ const HIT_RESULTS = ['バント', 'ゴロアウト', 'フライアウト', 'ラ�
 const OUT_RESULTS = ['ゴロアウト', 'フライアウト', 'ライナーアウト', 'バント']
 const ADVANCE_REASONS = ['盗塁', 'タッチアップ', 'パスボール', '暴投', 'エラー・野選', 'その他']
 const BASES = ['1塁', '2塁', '3塁', '本塁']
+const MAX_BALLS_BEFORE_WALK = 3
 
 function RecordContent() {
   const { id: gameId } = useParams()
@@ -39,9 +40,10 @@ function RecordContent() {
   const [scoreUs, setScoreUs] = useState(0)
   const [scoreThem, setScoreThem] = useState(0)
   const [lastPitchId, setLastPitchId] = useState(null)
-  const [lastAction, setLastAction] = useState(null)
+  const [undoStack, setUndoStack] = useState([])
   const [opponentRunnerSeq, setOpponentRunnerSeq] = useState(1)
   const [activeBatterRunnerId, setActiveBatterRunnerId] = useState('')
+  const [opponentPitcherName, setOpponentPitcherName] = useState('')
   const halfSwitchingRef = useRef(false)
 
   const [activeBatters, setActiveBatters] = useState([])
@@ -209,11 +211,12 @@ function RecordContent() {
     setInning(state.inning || 1)
     setInningHalf(state.inningHalf || 'top')
     setUsBattingTurn(state.usBattingTurn || 'first')
-    setBalls(state.balls || 0)
+    setBalls(Math.max(0, Math.min(state.balls || 0, MAX_BALLS_BEFORE_WALK - 1)))
     setStrikes(state.strikes || 0)
     setOuts(state.outs || 0)
     setRunners(state.runners || { '1塁': null, '2塁': null, '3塁': null })
     setBatterIndex(state.batterIndex || 0)
+    setOpponentPitcherName(state.opponentPitcherName || '')
     setLoading(false)
   }
 
@@ -227,7 +230,8 @@ function RecordContent() {
       strikes: next.strikes ?? strikes,
       outs: next.outs ?? outs,
       runners: next.runners ?? runners,
-      batterIndex: next.batterIndex ?? batterIndex
+      batterIndex: next.batterIndex ?? batterIndex,
+      opponentPitcherName: next.opponentPitcherName ?? opponentPitcherName
     }
     const { error } = await supabase
       .from('games')
@@ -251,6 +255,7 @@ function RecordContent() {
       outs,
       runners: { ...runners },
       batterIndex,
+      opponentPitcherName,
       scoreUs,
       scoreThem,
       lastPitchId,
@@ -267,6 +272,7 @@ function RecordContent() {
     setOuts(snapshot.outs)
     setRunners(snapshot.runners)
     setBatterIndex(snapshot.batterIndex)
+    setOpponentPitcherName(snapshot.opponentPitcherName || '')
     setScoreUs(snapshot.scoreUs)
     setScoreThem(snapshot.scoreThem)
     setLastPitchId(snapshot.lastPitchId || null)
@@ -280,6 +286,14 @@ function RecordContent() {
     setAdvanceRunner('')
     setAdvanceTo('')
     setScoreRunners([])
+  }
+
+  function pushUndoAction(action) {
+    setUndoStack((prev) => {
+      const next = [...prev, action]
+      // Keep recent history bounded.
+      return next.length > 20 ? next.slice(next.length - 20) : next
+    })
   }
 
   function createOpponentRunnerId() {
@@ -526,7 +540,7 @@ function RecordContent() {
       const pitchId = await savePitch(pitch, 'ボーク', 'ボーク')
       if (pitchId) action.pitchIds.push(pitchId)
       setPanel('error')
-      setLastAction(action)
+      pushUndoAction(action)
       return
     }
 
@@ -548,13 +562,15 @@ function RecordContent() {
         persistGameState({ strikes: newS })
       }
       setPanel('error')
-      setLastAction(action)
+      pushUndoAction(action)
       return
     }
 
     if (pitch === 'ボール') {
-      const newB = balls + 1
-      if (newB >= 4) {
+      // Clamp to valid range to avoid accidental early walk on stale state.
+      const normalizedBalls = Math.max(0, Math.min(balls, MAX_BALLS_BEFORE_WALK - 1))
+      const newB = normalizedBalls + 1
+      if (newB === MAX_BALLS_BEFORE_WALK) {
         const pitchId = await savePitch(pitch, '四球', null)
         if (pitchId) action.pitchIds.push(pitchId)
         const paId = await savePA('四球', null)
@@ -576,13 +592,13 @@ function RecordContent() {
           batterIndex: nextIndex
         })
       } else {
-        setBalls(Math.min(newB, 3))
+        setBalls(newB)
         const pitchId = await savePitch(pitch, null, null)
         if (pitchId) action.pitchIds.push(pitchId)
-        persistGameState({ balls: Math.min(newB, 3) })
+        persistGameState({ balls: newB })
       }
       setPanel('error')
-      setLastAction(action)
+      pushUndoAction(action)
       return
     }
 
@@ -608,7 +624,7 @@ function RecordContent() {
         batterIndex: nextIndex
       })
       setPanel('error')
-      setLastAction(action)
+      pushUndoAction(action)
       return
     }
 
@@ -624,7 +640,7 @@ function RecordContent() {
         setOuts(newOuts)
         persistGameState({ outs: newOuts, balls: 0, strikes: 0, batterIndex: nextIndex })
         setPanel('error')
-        setLastAction(action)
+        pushUndoAction(action)
         return
       }
 
@@ -634,7 +650,7 @@ function RecordContent() {
       if (pitchId) action.pitchIds.push(pitchId)
       persistGameState({ strikes: nextStrikes })
       setPanel('error')
-      setLastAction(action)
+      pushUndoAction(action)
       return
     }
   }
@@ -705,7 +721,7 @@ function RecordContent() {
       })
     }
     setPanel('error')
-    setLastAction(action)
+    pushUndoAction(action)
   }
 
   function startAdvanceFlow(kind) {
@@ -818,14 +834,15 @@ function RecordContent() {
   }
 
   async function undoLastInput() {
-    if (!lastAction || !teamId) return
+    if (undoStack.length === 0 || !teamId) return
+    const action = undoStack[undoStack.length - 1]
     setErrorMsg('')
 
-    if (lastAction.pitchIds.length > 0) {
+    if (action.pitchIds.length > 0) {
       const { error } = await supabase
         .from('runner_advances')
         .delete()
-        .in('pitch_id', lastAction.pitchIds)
+        .in('pitch_id', action.pitchIds)
         .eq('team_id', teamId)
       if (error) {
         setErrorMsg(error.message)
@@ -833,11 +850,11 @@ function RecordContent() {
       }
     }
 
-    if (lastAction.paIds.length > 0) {
+    if (action.paIds.length > 0) {
       const { error } = await supabase
         .from('plate_appearances')
         .delete()
-        .in('id', lastAction.paIds)
+        .in('id', action.paIds)
         .eq('team_id', teamId)
       if (error) {
         setErrorMsg(error.message)
@@ -845,11 +862,11 @@ function RecordContent() {
       }
     }
 
-    if (lastAction.pitchIds.length > 0) {
+    if (action.pitchIds.length > 0) {
       const { error } = await supabase
         .from('pitches')
         .delete()
-        .in('id', lastAction.pitchIds)
+        .in('id', action.pitchIds)
         .eq('team_id', teamId)
       if (error) {
         setErrorMsg(error.message)
@@ -857,21 +874,22 @@ function RecordContent() {
       }
     }
 
-    restoreSnapshot(lastAction.before)
+    restoreSnapshot(action.before)
     const { error: gameError } = await supabase
       .from('games')
       .update({
-        score_us: lastAction.before.scoreUs,
-        score_them: lastAction.before.scoreThem,
+        score_us: action.before.scoreUs,
+        score_them: action.before.scoreThem,
         state_json: {
-          inning: lastAction.before.inning,
-          inningHalf: lastAction.before.inningHalf,
-          usBattingTurn: lastAction.before.usBattingTurn,
-          balls: lastAction.before.balls,
-          strikes: lastAction.before.strikes,
-          outs: lastAction.before.outs,
-          runners: lastAction.before.runners,
-          batterIndex: lastAction.before.batterIndex
+          inning: action.before.inning,
+          inningHalf: action.before.inningHalf,
+          usBattingTurn: action.before.usBattingTurn,
+          balls: action.before.balls,
+          strikes: action.before.strikes,
+          outs: action.before.outs,
+          runners: action.before.runners,
+          batterIndex: action.before.batterIndex,
+          opponentPitcherName: action.before.opponentPitcherName || ''
         }
       })
       .eq('id', gameId)
@@ -880,7 +898,7 @@ function RecordContent() {
       setErrorMsg(gameError.message)
       return
     }
-    setLastAction(null)
+    setUndoStack((prev) => prev.slice(0, -1))
   }
 
   const runnerList = Object.entries(runners).filter(([, id]) => id)
@@ -917,7 +935,9 @@ function RecordContent() {
             </div>
             <div className="text-right">
               <div className="text-green-300 text-xs">{isOurOffense ? '相手投手' : '自チーム投手'}</div>
-              <div className="font-bold">{isOurOffense ? '未入力' : teamPitcher?.players?.name || '未入力'}</div>
+              <div className="font-bold">
+                {isOurOffense ? (opponentPitcherName || '未入力') : teamPitcher?.players?.name || '未入力'}
+              </div>
             </div>
           </div>
 
@@ -1005,7 +1025,7 @@ function RecordContent() {
             <div className="flex gap-2 mt-4">
               <button
                 onClick={undoLastInput}
-                disabled={!lastAction}
+                disabled={undoStack.length === 0}
                 className="flex-1 py-2 border-2 border-amber-500 text-amber-700 rounded-lg text-sm font-semibold disabled:opacity-50"
               >
                 1つ戻す

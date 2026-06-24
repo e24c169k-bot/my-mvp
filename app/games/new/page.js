@@ -16,6 +16,7 @@ function NewGameContent() {
   const [players, setPlayers] = useState([])
   const [teamId, setTeamId] = useState(teamIdParam || null)
   const [opponent, setOpponent] = useState('')
+  const [opponentPitcherName, setOpponentPitcherName] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [battingTurn, setBattingTurn] = useState('first') // first | second
   const [lineup, setLineup] = useState([])
@@ -100,7 +101,8 @@ function NewGameContent() {
       outs: 0,
       runners: { '1塁': null, '2塁': null, '3塁': null },
       batterIndex: 0,
-      usBattingTurn: battingTurn
+      usBattingTurn: battingTurn,
+      opponentPitcherName: opponentPitcherName.trim()
     }
 
     const { data: game, error: gameError } = await supabase
@@ -167,6 +169,15 @@ function NewGameContent() {
         <input type="text" value={opponent} onChange={e => setOpponent(e.target.value)}
           placeholder="例: ライオンズ"
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4" />
+
+        <label className="block text-xs text-gray-600 mb-1">相手投手（任意）</label>
+        <input
+          type="text"
+          value={opponentPitcherName}
+          onChange={e => setOpponentPitcherName(e.target.value)}
+          placeholder="例: 佐藤"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+        />
 
         <label className="block text-xs text-gray-600 mb-1">攻撃順 <span className="text-red-500">*</span></label>
         <div className="grid grid-cols-2 gap-2 mb-4">
