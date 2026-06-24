@@ -49,6 +49,7 @@ function RecordContent() {
   const [benchedStarters, setBenchedStarters] = useState(new Set())
   const [subTarget, setSubTarget] = useState(null)
   const [defenseSubTarget, setDefenseSubTarget] = useState(null)
+  const [defenseSubPosition, setDefenseSubPosition] = useState('')
   const [runnerSubTargetBase, setRunnerSubTargetBase] = useState('')
   const [runnerSubTargetPlayerId, setRunnerSubTargetPlayerId] = useState('')
 
@@ -344,10 +345,11 @@ function RecordContent() {
     setSubTarget(null)
   }
 
-  function executeDefenseSubstitution(newPlayerId) {
+  function executeDefenseSubstitution(newPlayerId, toPosition) {
     if (defenseSubTarget === null) return
     const outgoing = starters[defenseSubTarget]
     const incomingLineup = lineup.find((l) => l.player_id === newPlayerId)
+    const finalPosition = toPosition || outgoing?.position || incomingLineup?.position || ''
 
     setActiveBatters((prev) =>
       prev.map((b, i) =>
@@ -355,8 +357,7 @@ function RecordContent() {
           ? {
               ...b,
               playerId: newPlayerId,
-              // Keep defensive slot as outgoing position.
-              position: outgoing?.position || incomingLineup?.position || b.position,
+              position: finalPosition || b.position,
               isStarter: incomingLineup?.is_starter || false
             }
           : b
@@ -365,10 +366,12 @@ function RecordContent() {
 
     if (outgoing?.isStarter) setBenchedStarters((prev) => new Set([...prev, outgoing.playerId]))
     if (benchedStarters.has(newPlayerId)) setReentryUsed((prev) => new Set([...prev, newPlayerId]))
-    if (outgoing?.position === 'P') setPitcherId(newPlayerId)
+    if (finalPosition === 'P') setPitcherId(newPlayerId)
+    else if (outgoing?.position === 'P') setPitcherId(null)
 
     setPanel('main')
     setDefenseSubTarget(null)
+    setDefenseSubPosition('')
   }
 
   function executeRunnerSub(newPlayerId) {
@@ -1118,7 +1121,7 @@ function RecordContent() {
 
         {panel === 'defense-sub' && (
           <div className="bg-green-50 border-2 border-green-400 rounded-xl p-4">
-            <button onClick={() => { setDefenseSubTarget(null); setPanel('main') }} className="text-xs text-green-700 mb-3">← 戻る</button>
+            <button onClick={() => { setDefenseSubTarget(null); setDefenseSubPosition(''); setPanel('main') }} className="text-xs text-green-700 mb-3">← 戻る</button>
             <h3 className="font-semibold text-sm mb-3">守備側選手交代</h3>
             {defenseSubTarget === null ? (
               <>
@@ -1127,7 +1130,14 @@ function RecordContent() {
                   {starters.map((s, i) => {
                     const p = lineup.find((l) => l.player_id === s.playerId)
                     return (
-                      <button key={s.playerId} onClick={() => setDefenseSubTarget(i)} className="flex items-center justify-between px-4 py-3 bg-white border-2 border-gray-200 rounded-lg text-sm">
+                      <button
+                        key={s.playerId}
+                        onClick={() => {
+                          setDefenseSubTarget(i)
+                          setDefenseSubPosition(s.position || '')
+                        }}
+                        className="flex items-center justify-between px-4 py-3 bg-white border-2 border-gray-200 rounded-lg text-sm"
+                      >
                         <span>{s.position || '-'}: {p?.players?.name}</span>
                         <span className="text-xs text-gray-400">守備</span>
                       </button>
@@ -1138,19 +1148,33 @@ function RecordContent() {
             ) : (
               <>
                 <p className="text-xs text-gray-600 mb-1">入る選手を選択してください</p>
+                <label className="block text-xs text-gray-700 mb-1 mt-2">投入先ポジション</label>
+                <select
+                  value={defenseSubPosition}
+                  onChange={(e) => setDefenseSubPosition(e.target.value)}
+                  className="w-full border border-gray-300 rounded px-2 py-2 text-xs mb-3"
+                >
+                  <option value="">選択してください</option>
+                  {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
                 {benchPlayers.length === 0 ? (
                   <p className="text-sm text-gray-500 py-4 text-center">交代できる選手がいません</p>
                 ) : (
                   <div className="flex flex-col gap-2">
                     {benchPlayers.map((p) => (
-                      <button key={p.player_id} onClick={() => executeDefenseSubstitution(p.player_id)} className="flex items-center justify-between px-4 py-3 bg-white border-2 border-green-300 rounded-lg text-sm">
+                      <button
+                        key={p.player_id}
+                        onClick={() => executeDefenseSubstitution(p.player_id, defenseSubPosition)}
+                        disabled={!defenseSubPosition}
+                        className="flex items-center justify-between px-4 py-3 bg-white border-2 border-green-300 rounded-lg text-sm disabled:opacity-50"
+                      >
                         <span><strong>#{p.players?.number}</strong> {p.players?.name}</span>
                         <span className="text-xs text-gray-500">{benchedStarters.has(p.player_id) ? '再出場' : '控え'}</span>
                       </button>
                     ))}
                   </div>
                 )}
-                <button onClick={() => setDefenseSubTarget(null)} className="mt-3 text-xs text-gray-500 underline">← 守備位置を選び直す</button>
+                <button onClick={() => { setDefenseSubTarget(null); setDefenseSubPosition('') }} className="mt-3 text-xs text-gray-500 underline">← 守備位置を選び直す</button>
               </>
             )}
           </div>
