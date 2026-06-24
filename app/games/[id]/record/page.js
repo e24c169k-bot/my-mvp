@@ -777,15 +777,15 @@ function RecordContent() {
             />
           </div>
 
-          <div className="mt-2 grid grid-cols-3 gap-1 text-[10px] text-white">
+          <div className="mt-2 grid grid-cols-3 gap-1 text-[10px] !text-white" style={{ color: '#fff' }}>
             {['1塁', '2塁', '3塁'].map((base) => {
               const runnerId = runners[base]
               const runnerName = runnerId
                 ? (lineup.find((l) => l.player_id === runnerId)?.players?.name || (String(runnerId).startsWith('opp-') ? '相手走者' : '走者'))
                 : 'なし'
               return (
-                <div key={base} className="bg-black/40 rounded px-1.5 py-1 text-center">
-                  <span className="font-semibold">{base}</span>: {runnerName}
+                <div key={base} className="bg-black/60 rounded px-1.5 py-1 text-center !text-white" style={{ color: '#fff' }}>
+                  <span className="font-semibold !text-white" style={{ color: '#fff' }}>{base}</span>: {runnerName}
                 </div>
               )
             })}
