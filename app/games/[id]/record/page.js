@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -41,6 +41,7 @@ function RecordContent() {
   const [lastPitchId, setLastPitchId] = useState(null)
   const [opponentRunnerSeq, setOpponentRunnerSeq] = useState(1)
   const [activeBatterRunnerId, setActiveBatterRunnerId] = useState('')
+  const halfSwitchingRef = useRef(false)
 
   const [activeBatters, setActiveBatters] = useState([])
   const [reentryUsed, setReentryUsed] = useState(new Set())
@@ -86,6 +87,12 @@ function RecordContent() {
   useEffect(() => {
     initialize()
   }, [gameId, teamIdParam])
+
+  useEffect(() => {
+    if (outs >= 3 && !halfSwitchingRef.current) {
+      nextHalfInning()
+    }
+  }, [outs])
 
   async function initialize() {
     setLoading(true)
@@ -373,6 +380,9 @@ function RecordContent() {
   }
 
   function nextHalfInning() {
+    if (halfSwitchingRef.current) return
+    halfSwitchingRef.current = true
+
     const nextHalf = inningHalf === 'top' ? 'bottom' : 'top'
     const nextInning = inningHalf === 'top' ? inning : inning + 1
     const emptyRunners = { '1塁': null, '2塁': null, '3塁': null }
@@ -391,6 +401,18 @@ function RecordContent() {
       outs: 0,
       runners: emptyRunners
     })
+    setPanel('main')
+    setSelectedPitch('')
+    setSelectedPos('')
+    setSelectedResult('')
+    setAdvanceKind('')
+    setAdvanceReason('')
+    setAdvanceRunner('')
+    setAdvanceTo('')
+    setScoreRunners([])
+    setActiveBatterRunnerId('')
+
+    halfSwitchingRef.current = false
   }
 
   async function selectPitch(pitch) {
@@ -417,7 +439,6 @@ function RecordContent() {
         const nextIndex = nextBatter()
         setOuts(newOuts)
         persistGameState({ outs: newOuts, balls: 0, strikes: 0, batterIndex: nextIndex })
-        if (newOuts >= 3) setTimeout(nextHalfInning, 100)
       } else {
         setStrikes(newS)
         await savePitch(pitch, null, null)
@@ -522,10 +543,7 @@ function RecordContent() {
       const nextIndex = nextBatter()
       setOuts(newOuts)
       persistGameState({ outs: newOuts, balls: 0, strikes: 0, batterIndex: nextIndex })
-      if (newOuts >= 3) {
-        setTimeout(nextHalfInning, 100)
-        return
-      }
+      if (newOuts >= 3) return
     } else {
       let nextRunners = { ...runners }
       const batterRunnerId = isOurOffense ? batter?.playerId : createOpponentRunnerId()
@@ -718,7 +736,7 @@ function RecordContent() {
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-bold text-white/80">O</span>
-              <div className="flex gap-1">{[0, 1].map((i) => <div key={i} className={`w-3.5 h-3.5 rounded-full border-2 ${i < outs ? 'bg-red-400 border-red-300' : 'border-white/40'}`} />)}</div>
+              <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className={`w-3.5 h-3.5 rounded-full border-2 ${i < outs ? 'bg-red-400 border-red-300' : 'border-white/40'}`} />)}</div>
             </div>
           </div>
 
