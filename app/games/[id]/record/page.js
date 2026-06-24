@@ -29,6 +29,7 @@ function RecordContent() {
 
   const [inning, setInning] = useState(1)
   const [inningHalf, setInningHalf] = useState('top')
+  const [usBattingTurn, setUsBattingTurn] = useState('first') // first | second
   const [balls, setBalls] = useState(0)
   const [strikes, setStrikes] = useState(0)
   const [outs, setOuts] = useState(0)
@@ -76,6 +77,9 @@ function RecordContent() {
   const batterPlayer = lineup.find((l) => l.player_id === batter?.playerId)
   const teamPitcher = lineup.find((l) => l.player_id === pitcherId)
   const catcherEntry = lineup.find((l) => l.position === 'C')
+  const isOurOffense =
+    (usBattingTurn === 'first' && inningHalf === 'top') ||
+    (usBattingTurn === 'second' && inningHalf === 'bottom')
 
   useEffect(() => {
     initialize()
@@ -178,6 +182,7 @@ function RecordContent() {
     const state = g?.state_json || {}
     setInning(state.inning || 1)
     setInningHalf(state.inningHalf || 'top')
+    setUsBattingTurn(state.usBattingTurn || 'first')
     setBalls(state.balls || 0)
     setStrikes(state.strikes || 0)
     setOuts(state.outs || 0)
@@ -191,6 +196,7 @@ function RecordContent() {
     const nextState = {
       inning: next.inning ?? inning,
       inningHalf: next.inningHalf ?? inningHalf,
+      usBattingTurn: next.usBattingTurn ?? usBattingTurn,
       balls: next.balls ?? balls,
       strikes: next.strikes ?? strikes,
       outs: next.outs ?? outs,
@@ -371,6 +377,7 @@ function RecordContent() {
     persistGameState({
       inning: nextInning,
       inningHalf: nextHalf,
+      usBattingTurn,
       balls: 0,
       strikes: 0,
       outs: 0,
@@ -378,7 +385,41 @@ function RecordContent() {
     })
   }
 
+  function finishOpponentHalfInning() {
+    const emptyRunners = { '1塁': null, '2塁': null, '3塁': null }
+    setBalls(0)
+    setStrikes(0)
+    setOuts(0)
+    setRunners(emptyRunners)
+    if (inningHalf === 'top') {
+      setInningHalf('bottom')
+      persistGameState({
+        inningHalf: 'bottom',
+        balls: 0,
+        strikes: 0,
+        outs: 0,
+        runners: emptyRunners
+      })
+    } else {
+      const nextInning = inning + 1
+      setInning(nextInning)
+      setInningHalf('top')
+      persistGameState({
+        inning: nextInning,
+        inningHalf: 'top',
+        balls: 0,
+        strikes: 0,
+        outs: 0,
+        runners: emptyRunners
+      })
+    }
+  }
+
   async function selectPitch(pitch) {
+    if (!isOurOffense) {
+      setErrorMsg('現在は相手チームの攻撃中です。守備終了後に入力してください。')
+      return
+    }
     setSelectedPitch(pitch)
     setErrorMsg('')
     if (pitch === 'ヒッティング') {
@@ -689,24 +730,42 @@ function RecordContent() {
 
         {panel === 'main' && (
           <div>
-            <h3 className="font-semibold text-sm mb-2">一球結果</h3>
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              {PITCH_RESULTS.map((p) => (
-                <button key={p} onClick={() => selectPitch(p)} className={`py-3 px-2 rounded-lg border-2 text-sm font-semibold ${p === 'ヒッティング' ? 'bg-orange-50 border-orange-400 text-orange-800' : ['申告敬遠', 'デッドボール', '打撃妨害', 'ボーク'].includes(p) ? 'bg-blue-50 border-blue-400 text-blue-800' : 'bg-white border-gray-300 text-gray-900'}`}>{p}</button>
-              ))}
-            </div>
+            {isOurOffense ? (
+              <>
+                <h3 className="font-semibold text-sm mb-2">一球結果</h3>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {PITCH_RESULTS.map((p) => (
+                    <button key={p} onClick={() => selectPitch(p)} className={`py-3 px-2 rounded-lg border-2 text-sm font-semibold ${p === 'ヒッティング' ? 'bg-orange-50 border-orange-400 text-orange-800' : ['申告敬遠', 'デッドボール', '打撃妨害', 'ボーク'].includes(p) ? 'bg-blue-50 border-blue-400 text-blue-800' : 'bg-white border-gray-300 text-gray-900'}`}>{p}</button>
+                  ))}
+                </div>
 
-            <h3 className="font-semibold text-sm mb-2">選手交代</h3>
-            <button onClick={() => setPanel('offense-sub')} className="w-full py-2 px-3 border-2 border-green-700 text-green-800 rounded-lg text-sm font-semibold mb-2">攻撃側交代</button>
-            {runnerPlayers.length > 0 && (
-              <button onClick={() => setPanel('runner-sub')} className="w-full py-2 px-3 border-2 border-blue-600 text-blue-800 rounded-lg text-sm font-semibold mb-2">通常代走</button>
+                <h3 className="font-semibold text-sm mb-2">選手交代</h3>
+                <button onClick={() => setPanel('offense-sub')} className="w-full py-2 px-3 border-2 border-green-700 text-green-800 rounded-lg text-sm font-semibold mb-2">攻撃側交代</button>
+                {runnerPlayers.length > 0 && (
+                  <button onClick={() => setPanel('runner-sub')} className="w-full py-2 px-3 border-2 border-blue-600 text-blue-800 rounded-lg text-sm font-semibold mb-2">通常代走</button>
+                )}
+                {canTemporary && <button onClick={() => setPanel('temporary')} className="w-full py-2 px-3 bg-yellow-50 border-2 border-yellow-400 text-yellow-800 rounded-lg text-sm font-semibold mb-2">テンポラリー（臨時代走）</button>}
+
+                <div className="flex gap-2 mt-4">
+                  <button onClick={addOpponentScore} className="flex-1 py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-700">相手 ＋1点</button>
+                  <Link href={`/games/${gameId}/finish?season=${seasonId}&team=${teamId}`} className="flex-1 py-2 bg-red-700 text-white rounded-lg text-sm font-semibold text-center">試合終了へ</Link>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="font-semibold text-sm mb-2">相手チームの攻撃</h3>
+                <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-3 mb-3 text-sm text-blue-900">
+                  現在は相手の攻撃中です。失点を入力し、3アウト後に攻守交代してください。
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <button onClick={addOpponentScore} className="py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-700">相手 ＋1点</button>
+                  <button onClick={finishOpponentHalfInning} className="py-2 bg-green-700 text-white rounded-lg text-sm font-semibold">守備終了（3アウト）</button>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Link href={`/games/${gameId}/finish?season=${seasonId}&team=${teamId}`} className="flex-1 py-2 bg-red-700 text-white rounded-lg text-sm font-semibold text-center">試合終了へ</Link>
+                </div>
+              </>
             )}
-            {canTemporary && <button onClick={() => setPanel('temporary')} className="w-full py-2 px-3 bg-yellow-50 border-2 border-yellow-400 text-yellow-800 rounded-lg text-sm font-semibold mb-2">テンポラリー（臨時代走）</button>}
-
-            <div className="flex gap-2 mt-4">
-              <button onClick={addOpponentScore} className="flex-1 py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-700">相手 ＋1点</button>
-              <Link href={`/games/${gameId}/finish?season=${seasonId}&team=${teamId}`} className="flex-1 py-2 bg-red-700 text-white rounded-lg text-sm font-semibold text-center">試合終了へ</Link>
-            </div>
           </div>
         )}
 
