@@ -43,6 +43,8 @@ function RecordContent() {
   const [reentryUsed, setReentryUsed] = useState(new Set())
   const [benchedStarters, setBenchedStarters] = useState(new Set())
   const [subTarget, setSubTarget] = useState(null)
+  const [runnerSubTargetBase, setRunnerSubTargetBase] = useState('')
+  const [runnerSubTargetPlayerId, setRunnerSubTargetPlayerId] = useState('')
 
   const [panel, setPanel] = useState('main')
   const [selectedPitch, setSelectedPitch] = useState('')
@@ -261,6 +263,39 @@ function RecordContent() {
     })
     setPanel('main')
     setSubTarget(null)
+  }
+
+  function executeRunnerSub(newPlayerId) {
+    if (!runnerSubTargetBase || !runnerSubTargetPlayerId) return
+    const outgoingPlayerId = runnerSubTargetPlayerId
+    const incomingLineup = lineup.find((l) => l.player_id === newPlayerId)
+    const outgoingIndex = starters.findIndex((s) => s.playerId === outgoingPlayerId)
+    const outgoing = outgoingIndex >= 0 ? starters[outgoingIndex] : null
+
+    if (outgoingIndex >= 0) {
+      setActiveBatters((prev) =>
+        prev.map((b, i) =>
+          i === outgoingIndex
+            ? {
+                ...b,
+                playerId: newPlayerId,
+                position: incomingLineup?.position || b.position,
+                isStarter: incomingLineup?.is_starter || false
+              }
+            : b
+        )
+      )
+    }
+
+    if (outgoing?.isStarter) setBenchedStarters((prev) => new Set([...prev, outgoing.playerId]))
+    if (benchedStarters.has(newPlayerId)) setReentryUsed((prev) => new Set([...prev, newPlayerId]))
+
+    const nextRunners = { ...runners, [runnerSubTargetBase]: newPlayerId }
+    setRunners(nextRunners)
+    persistGameState({ runners: nextRunners })
+    setRunnerSubTargetBase('')
+    setRunnerSubTargetPlayerId('')
+    setPanel('main')
   }
 
   const hasRunnerP = teamPitcher && Object.values(runners).some((r) => r === pitcherId)
@@ -663,6 +698,9 @@ function RecordContent() {
 
             <h3 className="font-semibold text-sm mb-2">選手交代</h3>
             <button onClick={() => setPanel('offense-sub')} className="w-full py-2 px-3 border-2 border-green-700 text-green-800 rounded-lg text-sm font-semibold mb-2">攻撃側交代</button>
+            {runnerPlayers.length > 0 && (
+              <button onClick={() => setPanel('runner-sub')} className="w-full py-2 px-3 border-2 border-blue-600 text-blue-800 rounded-lg text-sm font-semibold mb-2">通常代走</button>
+            )}
             {canTemporary && <button onClick={() => setPanel('temporary')} className="w-full py-2 px-3 bg-yellow-50 border-2 border-yellow-400 text-yellow-800 rounded-lg text-sm font-semibold mb-2">テンポラリー（臨時代走）</button>}
 
             <div className="flex gap-2 mt-4">
@@ -769,6 +807,75 @@ function RecordContent() {
               <>
                 {benchPlayers.length === 0 ? <p className="text-sm text-gray-500 py-4 text-center">交代できる選手がいません</p> : <div className="flex flex-col gap-2">{benchPlayers.map((p) => <button key={p.player_id} onClick={() => executeSubstitution(p.player_id)} className="flex items-center justify-between px-4 py-3 bg-white border-2 border-green-300 rounded-lg text-sm"><span><strong>#{p.players?.number}</strong> {p.players?.name}</span><span className="text-xs text-gray-500">{benchedStarters.has(p.player_id) ? '再出場' : '控え'}</span></button>)}</div>}
                 <button onClick={() => setSubTarget(null)} className="mt-3 text-xs text-gray-500 underline">← 選び直す</button>
+              </>
+            )}
+          </div>
+        )}
+
+        {panel === 'runner-sub' && (
+          <div className="bg-blue-50 border-2 border-blue-400 rounded-xl p-4">
+            <button
+              onClick={() => {
+                setRunnerSubTargetBase('')
+                setRunnerSubTargetPlayerId('')
+                setPanel('main')
+              }}
+              className="text-xs text-green-700 mb-3"
+            >
+              ← 戻る
+            </button>
+            <h3 className="font-semibold text-sm mb-3">通常代走</h3>
+
+            {!runnerSubTargetBase ? (
+              <>
+                <p className="text-xs text-gray-600 mb-2">代走を出す走者を選択してください</p>
+                <div className="flex flex-col gap-2">
+                  {runnerPlayers.map(({ base, player, pid }) => (
+                    <button
+                      key={base}
+                      onClick={() => {
+                        setRunnerSubTargetBase(base)
+                        setRunnerSubTargetPlayerId(pid)
+                      }}
+                      className="flex items-center justify-between px-4 py-3 bg-white border-2 border-gray-200 rounded-lg text-sm"
+                    >
+                      <span>{base}: {player?.name}</span>
+                      <span className="text-xs text-gray-400">走者</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-gray-600 mb-1">代走を選択してください</p>
+                <p className="text-xs bg-blue-100 border border-blue-200 rounded px-2 py-1 mb-3">
+                  対象: {runnerSubTargetBase}
+                </p>
+                {benchPlayers.length === 0 ? (
+                  <p className="text-sm text-gray-500 py-4 text-center">交代できる選手がいません</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {benchPlayers.map((p) => (
+                      <button
+                        key={p.player_id}
+                        onClick={() => executeRunnerSub(p.player_id)}
+                        className="flex items-center justify-between px-4 py-3 bg-white border-2 border-blue-300 rounded-lg text-sm"
+                      >
+                        <span><strong>#{p.players?.number}</strong> {p.players?.name}</span>
+                        <span className="text-xs text-gray-500">{benchedStarters.has(p.player_id) ? '再出場' : '控え'}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    setRunnerSubTargetBase('')
+                    setRunnerSubTargetPlayerId('')
+                  }}
+                  className="mt-3 text-xs text-gray-500 underline"
+                >
+                  ← 走者を選び直す
+                </button>
               </>
             )}
           </div>
