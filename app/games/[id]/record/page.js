@@ -516,6 +516,18 @@ function RecordContent() {
     }
 
     if (pitch === 'ファウル' || pitch === 'バントF') {
+      // Two-strike bunt foul is an automatic strikeout.
+      if (pitch === 'バントF' && strikes >= 2) {
+        await savePitch(pitch, '三振', null)
+        await savePA('三振', null)
+        const newOuts = outs + 1
+        const nextIndex = nextBatter()
+        setOuts(newOuts)
+        persistGameState({ outs: newOuts, balls: 0, strikes: 0, batterIndex: nextIndex })
+        setPanel('error')
+        return
+      }
+
       const nextStrikes = strikes < 2 ? strikes + 1 : strikes
       setStrikes(nextStrikes)
       await savePitch(pitch, null, null)
