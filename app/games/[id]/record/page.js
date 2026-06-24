@@ -554,7 +554,7 @@ function RecordContent() {
 
     if (pitch === 'ボール') {
       const newB = balls + 1
-      if (newB >= 3) {
+      if (newB >= 4) {
         const pitchId = await savePitch(pitch, '四球', null)
         if (pitchId) action.pitchIds.push(pitchId)
         const paId = await savePA('四球', null)
@@ -576,10 +576,10 @@ function RecordContent() {
           batterIndex: nextIndex
         })
       } else {
-        setBalls(newB)
+        setBalls(Math.min(newB, 3))
         const pitchId = await savePitch(pitch, null, null)
         if (pitchId) action.pitchIds.push(pitchId)
-        persistGameState({ balls: newB })
+        persistGameState({ balls: Math.min(newB, 3) })
       }
       setPanel('error')
       setLastAction(action)
