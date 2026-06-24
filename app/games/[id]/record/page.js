@@ -865,9 +865,8 @@ function RecordContent() {
     setPanel('main')
   }
 
-  async function undoLastInput() {
-    if (undoStack.length === 0 || !teamId) return
-    const action = undoStack[undoStack.length - 1]
+  async function applyUndoAction(action) {
+    if (!action || !teamId) return false
     setErrorMsg('')
 
     if (action.advanceIds && action.advanceIds.length > 0) {
@@ -878,7 +877,7 @@ function RecordContent() {
         .eq('team_id', teamId)
       if (error) {
         setErrorMsg(error.message)
-        return
+        return false
       }
     }
 
@@ -890,7 +889,7 @@ function RecordContent() {
         .eq('team_id', teamId)
       if (error) {
         setErrorMsg(error.message)
-        return
+        return false
       }
     }
 
@@ -902,7 +901,7 @@ function RecordContent() {
         .eq('team_id', teamId)
       if (error) {
         setErrorMsg(error.message)
-        return
+        return false
       }
     }
 
@@ -914,7 +913,7 @@ function RecordContent() {
         .eq('team_id', teamId)
       if (error) {
         setErrorMsg(error.message)
-        return
+        return false
       }
     }
 
@@ -940,9 +939,33 @@ function RecordContent() {
       .eq('team_id', teamId)
     if (gameError) {
       setErrorMsg(gameError.message)
-      return
+      return false
     }
+    return true
+  }
+
+  async function undoLastInput() {
+    if (undoStack.length === 0 || !teamId) return
+    const action = undoStack[undoStack.length - 1]
+    const ok = await applyUndoAction(action)
+    if (!ok) return
     setUndoStack((prev) => prev.slice(0, -1))
+  }
+
+  async function undoTwoInputs() {
+    if (undoStack.length === 0 || !teamId) return
+    const current = [...undoStack]
+    const last = current.pop()
+    const ok1 = await applyUndoAction(last)
+    if (!ok1) return
+
+    const second = current.pop()
+    if (second) {
+      const ok2 = await applyUndoAction(second)
+      if (!ok2) return
+    }
+
+    setUndoStack((prev) => prev.slice(0, Math.max(0, prev.length - 2)))
   }
 
   const runnerList = Object.entries(runners).filter(([, id]) => id)
@@ -1073,6 +1096,13 @@ function RecordContent() {
                 className="flex-1 py-2 border-2 border-amber-500 text-amber-700 rounded-lg text-sm font-semibold disabled:opacity-50"
               >
                 1つ戻す
+              </button>
+              <button
+                onClick={undoTwoInputs}
+                disabled={undoStack.length < 2}
+                className="flex-1 py-2 border-2 border-amber-700 text-amber-900 rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                2つ戻す
               </button>
               <Link href={`/games/${gameId}/finish?season=${seasonId}&team=${teamId}`} className="flex-1 py-2 bg-red-700 text-white rounded-lg text-sm font-semibold text-center">試合終了へ</Link>
             </div>
