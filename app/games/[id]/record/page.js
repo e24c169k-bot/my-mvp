@@ -776,6 +776,20 @@ function RecordContent() {
               style={{ bottom: 2, left: '50%', marginLeft: -10, clipPath: 'polygon(50% 0%, 0% 38%, 0% 100%, 100% 100%, 100% 38%)' }}
             />
           </div>
+
+          <div className="mt-2 grid grid-cols-3 gap-1 text-[10px] text-white/85">
+            {['1塁', '2塁', '3塁'].map((base) => {
+              const runnerId = runners[base]
+              const runnerName = runnerId
+                ? (lineup.find((l) => l.player_id === runnerId)?.players?.name || (String(runnerId).startsWith('opp-') ? '相手走者' : '走者'))
+                : 'なし'
+              return (
+                <div key={base} className="bg-black/25 rounded px-1.5 py-1 text-center">
+                  <span className="font-semibold">{base}</span>: {runnerName}
+                </div>
+              )
+            })}
+          </div>
         </div>
 
         {panel === 'main' && (
