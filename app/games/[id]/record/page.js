@@ -39,6 +39,8 @@ function RecordContent() {
   const [scoreUs, setScoreUs] = useState(0)
   const [scoreThem, setScoreThem] = useState(0)
   const [lastPitchId, setLastPitchId] = useState(null)
+  const [opponentRunnerSeq, setOpponentRunnerSeq] = useState(1)
+  const [activeBatterRunnerId, setActiveBatterRunnerId] = useState('')
 
   const [activeBatters, setActiveBatters] = useState([])
   const [reentryUsed, setReentryUsed] = useState(new Set())
@@ -215,6 +217,12 @@ function RecordContent() {
     if (error) setErrorMsg(error.message)
   }
 
+  function createOpponentRunnerId() {
+    const id = `opp-${inning}-${inningHalf}-${opponentRunnerSeq}`
+    setOpponentRunnerSeq((prev) => prev + 1)
+    return id
+  }
+
   function forceAdvanceOnWalk(baseRunners, batterId) {
     const nextRunners = { ...baseRunners }
     let runsScored = 0
@@ -326,9 +334,8 @@ function RecordContent() {
         team_id: teamId,
         inning,
         inning_half: inningHalf,
-        batter_id: batter?.playerId || null,
-        // This screen records our offensive events; opponent pitcher is not tracked yet.
-        pitcher_id: null,
+        batter_id: isOurOffense ? batter?.playerId || null : null,
+        pitcher_id: isOurOffense ? null : pitcherId || null,
         pitch_type: pitchType,
         result,
         advance_reason: advReason || null
@@ -344,6 +351,7 @@ function RecordContent() {
   }
 
   async function savePA(result, positionHitTo) {
+    if (!isOurOffense) return
     if (!teamId) return
     const { error } = await supabase.from('plate_appearances').insert({
       game_id: gameId,
@@ -357,8 +365,8 @@ function RecordContent() {
   }
 
   function nextBatter() {
-    const nextIndex = batterIndex + 1
-    setBatterIndex(nextIndex)
+    const nextIndex = isOurOffense ? batterIndex + 1 : batterIndex
+    if (isOurOffense) setBatterIndex(nextIndex)
     setBalls(0)
     setStrikes(0)
     return nextIndex
@@ -385,43 +393,10 @@ function RecordContent() {
     })
   }
 
-  function finishOpponentHalfInning() {
-    const emptyRunners = { '1塁': null, '2塁': null, '3塁': null }
-    setBalls(0)
-    setStrikes(0)
-    setOuts(0)
-    setRunners(emptyRunners)
-    if (inningHalf === 'top') {
-      setInningHalf('bottom')
-      persistGameState({
-        inningHalf: 'bottom',
-        balls: 0,
-        strikes: 0,
-        outs: 0,
-        runners: emptyRunners
-      })
-    } else {
-      const nextInning = inning + 1
-      setInning(nextInning)
-      setInningHalf('top')
-      persistGameState({
-        inning: nextInning,
-        inningHalf: 'top',
-        balls: 0,
-        strikes: 0,
-        outs: 0,
-        runners: emptyRunners
-      })
-    }
-  }
-
   async function selectPitch(pitch) {
-    if (!isOurOffense) {
-      setErrorMsg('現在は相手チームの攻撃中です。守備終了後に入力してください。')
-      return
-    }
     setSelectedPitch(pitch)
     setErrorMsg('')
+    setActiveBatterRunnerId('')
     if (pitch === 'ヒッティング') {
       setPanel('hitting')
       return
@@ -457,12 +432,22 @@ function RecordContent() {
       if (newB >= 3) {
         await savePitch(pitch, '四球', null)
         await savePA('四球', null)
-        const { nextRunners, runsScored } = forceAdvanceOnWalk(runners, batter?.playerId)
+        const batterRunnerId = isOurOffense ? batter?.playerId : createOpponentRunnerId()
+        setActiveBatterRunnerId(batterRunnerId || '')
+        const { nextRunners, runsScored } = forceAdvanceOnWalk(runners, batterRunnerId)
         const nextIndex = nextBatter()
-        const nextScore = scoreUs + runsScored
+        const nextScore = isOurOffense ? scoreUs + runsScored : scoreThem + runsScored
         setRunners(nextRunners)
-        setScoreUs(nextScore)
-        persistGameState({ runners: nextRunners, scoreUs: nextScore, balls: 0, strikes: 0, batterIndex: nextIndex })
+        if (isOurOffense) setScoreUs(nextScore)
+        else setScoreThem(nextScore)
+        persistGameState({
+          runners: nextRunners,
+          scoreUs: isOurOffense ? nextScore : scoreUs,
+          scoreThem: isOurOffense ? scoreThem : nextScore,
+          balls: 0,
+          strikes: 0,
+          batterIndex: nextIndex
+        })
       } else {
         setBalls(newB)
         await savePitch(pitch, null, null)
@@ -475,12 +460,22 @@ function RecordContent() {
     if (['申告敬遠', 'デッドボール', '打撃妨害'].includes(pitch)) {
       await savePitch(pitch, pitch, null)
       await savePA(pitch, null)
-      const { nextRunners, runsScored } = forceAdvanceOnWalk(runners, batter?.playerId)
-      const nextScore = scoreUs + runsScored
+      const batterRunnerId = isOurOffense ? batter?.playerId : createOpponentRunnerId()
+      setActiveBatterRunnerId(batterRunnerId || '')
+      const { nextRunners, runsScored } = forceAdvanceOnWalk(runners, batterRunnerId)
+      const nextScore = isOurOffense ? scoreUs + runsScored : scoreThem + runsScored
       const nextIndex = nextBatter()
       setRunners(nextRunners)
-      setScoreUs(nextScore)
-      persistGameState({ runners: nextRunners, scoreUs: nextScore, balls: 0, strikes: 0, batterIndex: nextIndex })
+      if (isOurOffense) setScoreUs(nextScore)
+      else setScoreThem(nextScore)
+      persistGameState({
+        runners: nextRunners,
+        scoreUs: isOurOffense ? nextScore : scoreUs,
+        scoreThem: isOurOffense ? scoreThem : nextScore,
+        balls: 0,
+        strikes: 0,
+        batterIndex: nextIndex
+      })
       setPanel('error')
       return
     }
@@ -533,18 +528,28 @@ function RecordContent() {
       }
     } else {
       let nextRunners = { ...runners }
-      let nextScore = scoreUs
-      if (res === 'ヒット') nextRunners['1塁'] = batter?.playerId
-      else if (res === '2B' || res === 'エン2B') nextRunners['2塁'] = batter?.playerId
-      else if (res === '3B') nextRunners['3塁'] = batter?.playerId
+      const batterRunnerId = isOurOffense ? batter?.playerId : createOpponentRunnerId()
+      setActiveBatterRunnerId(batterRunnerId || '')
+      let nextScore = isOurOffense ? scoreUs : scoreThem
+      if (res === 'ヒット') nextRunners['1塁'] = batterRunnerId
+      else if (res === '2B' || res === 'エン2B') nextRunners['2塁'] = batterRunnerId
+      else if (res === '3B') nextRunners['3塁'] = batterRunnerId
       else if (res === 'HR' || res === '走HR') {
         nextScore += 1 + Object.values(runners).filter((r) => r).length
         nextRunners = { '1塁': null, '2塁': null, '3塁': null }
       }
       const nextIndex = nextBatter()
       setRunners(nextRunners)
-      setScoreUs(nextScore)
-      persistGameState({ runners: nextRunners, scoreUs: nextScore, balls: 0, strikes: 0, batterIndex: nextIndex })
+      if (isOurOffense) setScoreUs(nextScore)
+      else setScoreThem(nextScore)
+      persistGameState({
+        runners: nextRunners,
+        scoreUs: isOurOffense ? nextScore : scoreUs,
+        scoreThem: isOurOffense ? scoreThem : nextScore,
+        balls: 0,
+        strikes: 0,
+        batterIndex: nextIndex
+      })
     }
     setPanel('error')
   }
@@ -571,7 +576,7 @@ function RecordContent() {
       return
     }
     let nextRunners = { ...runners }
-    let nextScore = scoreUs
+    let nextScore = isOurOffense ? scoreUs : scoreThem
     for (const base of ['1塁', '2塁', '3塁']) {
       if (nextRunners[base] === advanceRunner) nextRunners[base] = null
     }
@@ -579,8 +584,13 @@ function RecordContent() {
     else nextRunners[advanceTo] = advanceRunner
 
     setRunners(nextRunners)
-    setScoreUs(nextScore)
-    persistGameState({ runners: nextRunners, scoreUs: nextScore })
+    if (isOurOffense) setScoreUs(nextScore)
+    else setScoreThem(nextScore)
+    persistGameState({
+      runners: nextRunners,
+      scoreUs: isOurOffense ? nextScore : scoreUs,
+      scoreThem: isOurOffense ? scoreThem : nextScore
+    })
 
     if (lastPitchId && teamId) {
       await supabase.from('runner_advances').insert({
@@ -598,14 +608,19 @@ function RecordContent() {
 
   async function confirmScore() {
     const cnt = scoreRunners.length
-    const nextScore = scoreUs + cnt
+    const nextScore = (isOurOffense ? scoreUs : scoreThem) + cnt
     const nextRunners = { ...runners }
     for (const base of ['1塁', '2塁', '3塁']) {
       if (scoreRunners.includes(nextRunners[base])) nextRunners[base] = null
     }
-    setScoreUs(nextScore)
+    if (isOurOffense) setScoreUs(nextScore)
+    else setScoreThem(nextScore)
     setRunners(nextRunners)
-    persistGameState({ scoreUs: nextScore, runners: nextRunners })
+    persistGameState({
+      runners: nextRunners,
+      scoreUs: isOurOffense ? nextScore : scoreUs,
+      scoreThem: isOurOffense ? scoreThem : nextScore
+    })
 
     if (lastPitchId && teamId) {
       for (const runnerId of scoreRunners) {
@@ -632,6 +647,7 @@ function RecordContent() {
     setAdvanceRunner('')
     setAdvanceTo('')
     setScoreRunners([])
+    setActiveBatterRunnerId('')
   }
 
   function confirmTemporary() {
@@ -656,7 +672,7 @@ function RecordContent() {
   const runnerList = Object.entries(runners).filter(([, id]) => id)
   const runnerPlayers = runnerList.map(([base, pid]) => ({
     base,
-    player: lineup.find((l) => l.player_id === pid)?.players,
+    player: lineup.find((l) => l.player_id === pid)?.players || { name: String(pid).startsWith('opp-') ? '相手走者' : '走者' },
     pid
   }))
 
@@ -680,12 +696,14 @@ function RecordContent() {
 
           <div className="flex justify-between items-center mb-3 text-sm">
             <div>
-              <div className="text-green-300 text-xs">打者</div>
-              <div className="font-bold">{batterPlayer?.players?.name || '—'} #{batterPlayer?.players?.number || '-'}</div>
+              <div className="text-green-300 text-xs">{isOurOffense ? '打者' : '相手打者'}</div>
+              <div className="font-bold">
+                {isOurOffense ? `${batterPlayer?.players?.name || '—'} #${batterPlayer?.players?.number || '-'}` : '相手打者'}
+              </div>
             </div>
             <div className="text-right">
-              <div className="text-green-300 text-xs">相手投手</div>
-              <div className="font-bold">未入力</div>
+              <div className="text-green-300 text-xs">{isOurOffense ? '相手投手' : '自チーム投手'}</div>
+              <div className="font-bold">{isOurOffense ? '未入力' : teamPitcher?.players?.name || '未入力'}</div>
             </div>
           </div>
 
@@ -730,42 +748,32 @@ function RecordContent() {
 
         {panel === 'main' && (
           <div>
+            <h3 className="font-semibold text-sm mb-2">{isOurOffense ? '一球結果（自チーム攻撃）' : '一球結果（相手チーム攻撃）'}</h3>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {PITCH_RESULTS.map((p) => (
+                <button key={p} onClick={() => selectPitch(p)} className={`py-3 px-2 rounded-lg border-2 text-sm font-semibold ${p === 'ヒッティング' ? 'bg-orange-50 border-orange-400 text-orange-800' : ['申告敬遠', 'デッドボール', '打撃妨害', 'ボーク'].includes(p) ? 'bg-blue-50 border-blue-400 text-blue-800' : 'bg-white border-gray-300 text-gray-900'}`}>{p}</button>
+              ))}
+            </div>
+
             {isOurOffense ? (
               <>
-                <h3 className="font-semibold text-sm mb-2">一球結果</h3>
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  {PITCH_RESULTS.map((p) => (
-                    <button key={p} onClick={() => selectPitch(p)} className={`py-3 px-2 rounded-lg border-2 text-sm font-semibold ${p === 'ヒッティング' ? 'bg-orange-50 border-orange-400 text-orange-800' : ['申告敬遠', 'デッドボール', '打撃妨害', 'ボーク'].includes(p) ? 'bg-blue-50 border-blue-400 text-blue-800' : 'bg-white border-gray-300 text-gray-900'}`}>{p}</button>
-                  ))}
-                </div>
-
                 <h3 className="font-semibold text-sm mb-2">選手交代</h3>
                 <button onClick={() => setPanel('offense-sub')} className="w-full py-2 px-3 border-2 border-green-700 text-green-800 rounded-lg text-sm font-semibold mb-2">攻撃側交代</button>
                 {runnerPlayers.length > 0 && (
                   <button onClick={() => setPanel('runner-sub')} className="w-full py-2 px-3 border-2 border-blue-600 text-blue-800 rounded-lg text-sm font-semibold mb-2">通常代走</button>
                 )}
                 {canTemporary && <button onClick={() => setPanel('temporary')} className="w-full py-2 px-3 bg-yellow-50 border-2 border-yellow-400 text-yellow-800 rounded-lg text-sm font-semibold mb-2">テンポラリー（臨時代走）</button>}
-
-                <div className="flex gap-2 mt-4">
-                  <button onClick={addOpponentScore} className="flex-1 py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-700">相手 ＋1点</button>
-                  <Link href={`/games/${gameId}/finish?season=${seasonId}&team=${teamId}`} className="flex-1 py-2 bg-red-700 text-white rounded-lg text-sm font-semibold text-center">試合終了へ</Link>
-                </div>
               </>
             ) : (
-              <>
-                <h3 className="font-semibold text-sm mb-2">相手チームの攻撃</h3>
-                <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-3 mb-3 text-sm text-blue-900">
-                  現在は相手の攻撃中です。失点を入力し、3アウト後に攻守交代してください。
-                </div>
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  <button onClick={addOpponentScore} className="py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-700">相手 ＋1点</button>
-                  <button onClick={finishOpponentHalfInning} className="py-2 bg-green-700 text-white rounded-lg text-sm font-semibold">守備終了（3アウト）</button>
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <Link href={`/games/${gameId}/finish?season=${seasonId}&team=${teamId}`} className="flex-1 py-2 bg-red-700 text-white rounded-lg text-sm font-semibold text-center">試合終了へ</Link>
-                </div>
-              </>
+              <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-3 mb-3 text-sm text-blue-900">
+                相手チーム攻撃も同じ入力フローで記録できます。
+              </div>
             )}
+
+            <div className="flex gap-2 mt-4">
+              <button onClick={addOpponentScore} className="flex-1 py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-700">相手 ＋1点</button>
+              <Link href={`/games/${gameId}/finish?season=${seasonId}&team=${teamId}`} className="flex-1 py-2 bg-red-700 text-white rounded-lg text-sm font-semibold text-center">試合終了へ</Link>
+            </div>
           </div>
         )}
 
@@ -826,7 +834,9 @@ function RecordContent() {
             <select value={advanceRunner} onChange={(e) => setAdvanceRunner(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3 text-gray-900">
               <option value="">選択してください</option>
               {runnerPlayers.map(({ base, player, pid }) => <option key={base} value={pid}>{base}: {player?.name}</option>)}
-              <option value={batter?.playerId}>打者: {batterPlayer?.players?.name}</option>
+              <option value={activeBatterRunnerId || ''}>
+                打者: {isOurOffense ? batterPlayer?.players?.name : '相手打者'}
+              </option>
             </select>
             <label className="block text-xs text-gray-700 mb-1">進先</label>
             <select value={advanceTo} onChange={(e) => setAdvanceTo(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 text-gray-900">
