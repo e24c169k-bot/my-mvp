@@ -740,6 +740,12 @@ function RecordContent() {
   }
 
   async function confirmAdvance() {
+    const action = {
+      before: snapshotState(),
+      pitchIds: [],
+      paIds: [],
+      advanceIds: []
+    }
     if (!advanceRunner || !advanceTo) {
       if (advanceKind === 'both') setPanel('score')
       else confirmAll()
@@ -763,20 +769,36 @@ function RecordContent() {
     })
 
     if (lastPitchId && teamId) {
-      await supabase.from('runner_advances').insert({
+      const { data, error } = await supabase
+        .from('runner_advances')
+        .insert({
         pitch_id: lastPitchId,
         team_id: teamId,
         runner_id: advanceRunner,
         from_base: null,
         to_base: advanceTo,
         reason: advanceReason || 'その他'
-      })
+        })
+        .select('id')
+        .single()
+      if (error) {
+        setErrorMsg(error.message)
+        return
+      }
+      if (data?.id) action.advanceIds.push(data.id)
     }
     if (advanceKind === 'both') setPanel('score')
     else confirmAll()
+    pushUndoAction(action)
   }
 
   async function confirmScore() {
+    const action = {
+      before: snapshotState(),
+      pitchIds: [],
+      paIds: [],
+      advanceIds: []
+    }
     const cnt = scoreRunners.length
     const nextScore = (isOurOffense ? scoreUs : scoreThem) + cnt
     const nextRunners = { ...runners }
@@ -794,17 +816,27 @@ function RecordContent() {
 
     if (lastPitchId && teamId) {
       for (const runnerId of scoreRunners) {
-        await supabase.from('runner_advances').insert({
+        const { data, error } = await supabase
+          .from('runner_advances')
+          .insert({
           pitch_id: lastPitchId,
           team_id: teamId,
           runner_id: runnerId,
           from_base: null,
           to_base: '本塁',
           reason: advanceReason || 'その他'
-        })
+          })
+          .select('id')
+          .single()
+        if (error) {
+          setErrorMsg(error.message)
+          return
+        }
+        if (data?.id) action.advanceIds.push(data.id)
       }
     }
     confirmAll()
+    pushUndoAction(action)
   }
 
   function confirmAll() {
@@ -837,6 +869,18 @@ function RecordContent() {
     if (undoStack.length === 0 || !teamId) return
     const action = undoStack[undoStack.length - 1]
     setErrorMsg('')
+
+    if (action.advanceIds && action.advanceIds.length > 0) {
+      const { error } = await supabase
+        .from('runner_advances')
+        .delete()
+        .in('id', action.advanceIds)
+        .eq('team_id', teamId)
+      if (error) {
+        setErrorMsg(error.message)
+        return
+      }
+    }
 
     if (action.pitchIds.length > 0) {
       const { error } = await supabase
