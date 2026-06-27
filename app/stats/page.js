@@ -144,7 +144,8 @@ function StatsContent() {
     // 投手成績を計算
     const pitching = Object.values(pitchingMap).map(p => {
       const ip = Math.floor(p.outs / 3) + (p.outs % 3) / 10
-      const era = p.outs > 0 ? (p.earnedRuns * 27 / p.outs) : 0
+      // Softball convention: ERA based on 7 innings.
+      const era = p.outs > 0 ? (p.earnedRuns * 21 / p.outs) : 0
       const bbPer9 = p.outs > 0 ? (p.walks * 27 / p.outs) : 0
       const kPer9 = p.outs > 0 ? (p.strikeouts * 27 / p.outs) : 0
       return {
