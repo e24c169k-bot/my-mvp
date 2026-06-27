@@ -236,11 +236,11 @@ function StatsContent() {
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
             <p className="text-xs text-gray-500">対象試合</p>
             <p className="text-sm font-semibold text-gray-900">{targetGame.date} vs {targetGame.opponent}</p>
-            <div className="mt-2 bg-white border border-green-200 rounded p-2">
-              <p className="text-[11px] text-green-700 mb-1">スコアボード</p>
-              <table className="w-full text-xs">
+            <div className="mt-2 bg-green-900 border-2 border-white rounded p-2">
+              <p className="text-[11px] text-white mb-1 font-semibold">スコアボード</p>
+              <table className="w-full text-xs text-white">
                 <thead>
-                  <tr className="text-gray-600">
+                  <tr className="text-white">
                     <th className="text-left font-semibold py-1">TEAM</th>
                     <th className="text-right font-semibold py-1">R</th>
                     <th className="text-right font-semibold py-1">H</th>
@@ -248,17 +248,20 @@ function StatsContent() {
                 </thead>
                 <tbody>
                   <tr>
-                    <td className="py-1 text-gray-900">{topTeamName}</td>
-                    <td className="py-1 text-right font-bold text-gray-900">{topScore}</td>
-                    <td className="py-1 text-right font-bold text-gray-900">{topHits}</td>
+                    <td className="py-1">{topTeamName}</td>
+                    <td className="py-1 text-right font-bold">{topScore}</td>
+                    <td className="py-1 text-right font-bold">{topHits}</td>
                   </tr>
                   <tr>
-                    <td className="py-1 text-gray-900">{bottomTeamName}</td>
-                    <td className="py-1 text-right font-bold text-gray-900">{bottomScore}</td>
-                    <td className="py-1 text-right font-bold text-gray-900">{bottomHits}</td>
+                    <td className="py-1">{bottomTeamName}</td>
+                    <td className="py-1 text-right font-bold">{bottomScore}</td>
+                    <td className="py-1 text-right font-bold">{bottomHits}</td>
                   </tr>
                 </tbody>
               </table>
+              <p className="text-[10px] text-white mt-1">
+                イニング: {targetGame?.state_json?.inning || '-'}回{targetGame?.state_json?.inningHalf === 'bottom' ? '裏' : '表'}
+              </p>
             </div>
             {targetGame?.state_json?.memoText && (
               <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded p-2">

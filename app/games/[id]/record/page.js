@@ -1514,11 +1514,11 @@ function RecordContent() {
             })}
           </div>
 
-          <div className="mt-3 bg-black/30 rounded-lg p-2">
-            <p className="text-[11px] text-green-200 mb-1">スコアボード</p>
-            <table className="w-full text-xs">
+          <div className="mt-3 bg-black/40 border-2 border-white/70 rounded-lg p-2">
+            <p className="text-[11px] text-white mb-1 font-semibold">スコアボード</p>
+            <table className="w-full text-xs text-white">
               <thead>
-                <tr className="text-white/80">
+                <tr className="text-white">
                   <th className="text-left font-semibold py-1">TEAM</th>
                   <th className="text-right font-semibold py-1">R</th>
                   <th className="text-right font-semibold py-1">H</th>
@@ -1537,8 +1537,8 @@ function RecordContent() {
                 </tr>
               </tbody>
             </table>
-            <p className="text-[10px] text-white/70 mt-1">
-              {inning}回{inningHalf === 'top' ? '表' : '裏'} / {outs}アウト
+            <p className="text-[10px] text-white mt-1">
+              イニング: {inning}回{inningHalf === 'top' ? '表' : '裏'} / {outs}アウト
             </p>
           </div>
         </div>
