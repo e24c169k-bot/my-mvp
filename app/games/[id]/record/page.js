@@ -45,6 +45,7 @@ function RecordContent() {
   const [opponentRunnerSeq, setOpponentRunnerSeq] = useState(1)
   const [activeBatterRunnerId, setActiveBatterRunnerId] = useState('')
   const [opponentPitcherName, setOpponentPitcherName] = useState('')
+  const [memoText, setMemoText] = useState('')
   const [dhFpPairs, setDhFpPairs] = useState([])
   const halfSwitchingRef = useRef(false)
 
@@ -238,6 +239,7 @@ function RecordContent() {
     setRunners(state.runners || { '1塁': null, '2塁': null, '3塁': null })
     setBatterIndex(state.batterIndex || 0)
     setOpponentPitcherName(state.opponentPitcherName || '')
+    setMemoText(state.memoText || '')
 
     const stateDhFpPairs = Array.isArray(state.dhFpPairs) ? state.dhFpPairs : []
     if (stateDhFpPairs.length > 0) {
@@ -277,6 +279,7 @@ function RecordContent() {
       runners: next.runners ?? runners,
       batterIndex: next.batterIndex ?? batterIndex,
       opponentPitcherName: next.opponentPitcherName ?? opponentPitcherName,
+      memoText: next.memoText ?? memoText,
       dhFpPairs: next.dhFpPairs ?? dhFpPairs,
       appearedBenchPlayers: next.appearedBenchPlayers ?? Array.from(appearedBenchPlayers)
     }
@@ -303,6 +306,7 @@ function RecordContent() {
       runners: { ...runners },
       batterIndex,
       opponentPitcherName,
+      memoText,
       dhFpPairs: [...dhFpPairs],
       appearedBenchPlayers: Array.from(appearedBenchPlayers),
       scoreUs,
@@ -322,6 +326,7 @@ function RecordContent() {
     setRunners(snapshot.runners)
     setBatterIndex(snapshot.batterIndex)
     setOpponentPitcherName(snapshot.opponentPitcherName || '')
+    setMemoText(snapshot.memoText || '')
     setDhFpPairs(Array.isArray(snapshot.dhFpPairs) ? snapshot.dhFpPairs : [])
     setAppearedBenchPlayers(new Set(Array.isArray(snapshot.appearedBenchPlayers) ? snapshot.appearedBenchPlayers : []))
     setScoreUs(snapshot.scoreUs)
@@ -1207,6 +1212,10 @@ function RecordContent() {
     setActiveBatterRunnerId('')
   }
 
+  function saveMemo() {
+    persistGameState({ memoText: memoText || '' })
+  }
+
   function confirmTemporary() {
     const candidate = getTemporaryCandidate()
     if (!candidate) return
@@ -1288,6 +1297,7 @@ function RecordContent() {
           runners: action.before.runners,
           batterIndex: action.before.batterIndex,
           opponentPitcherName: action.before.opponentPitcherName || '',
+          memoText: action.before.memoText || '',
           dhFpPairs: Array.isArray(action.before.dhFpPairs) ? action.before.dhFpPairs : [],
           appearedBenchPlayers: Array.isArray(action.before.appearedBenchPlayers) ? action.before.appearedBenchPlayers : []
         }
@@ -1416,6 +1426,22 @@ function RecordContent() {
               )
             })}
           </div>
+        </div>
+
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
+          <label className="block text-xs text-gray-700 mb-1 font-semibold">メモ</label>
+          <textarea
+            value={memoText}
+            onChange={(e) => setMemoText(e.target.value)}
+            placeholder="例: 判定メモ、イレギュラー、次回確認事項"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-20 text-gray-900"
+          />
+          <button
+            onClick={saveMemo}
+            className="mt-2 px-3 py-2 text-xs font-semibold rounded-lg border border-gray-400 text-gray-700 bg-white"
+          >
+            メモを保存
+          </button>
         </div>
 
         {dhFpPairs.length > 0 && (
