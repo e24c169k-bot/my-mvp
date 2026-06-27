@@ -123,6 +123,7 @@ function StatsContent() {
         p.strikeouts += s.strikeouts || 0
         p.walks += s.walks || 0
         p.hbp += s.hit_by_pitch || 0
+        p.earnedRuns += s.earned_runs || 0
       }
     }
 
@@ -165,11 +166,11 @@ function StatsContent() {
   function downloadCSV() {
     const headers = tab === 'batting'
       ? ['選手', '背番号', '打数', '安打', '2B', '3B', 'HR', '四球', '打率', '出塁率', 'OPS']
-      : ['選手', '背番号', '投球回', '奪三振', '与四球', '防御率', '与四球率/9', '奪三振/9']
+      : ['選手', '背番号', '投球回', '自責点', '奪三振', '与四球', '防御率', '与四球率/9', '奪三振/9']
 
     const rows = tab === 'batting'
       ? battingStats.map(b => [b.name, b.number, b.ab, b.hits, b.doubles, b.triples, b.hr, b.walks, b.avg, b.obp, b.ops])
-      : pitchingStats.map(p => [p.name, p.number, p.ip, p.strikeouts, p.walks, p.era, p.bbPer9, p.kPer9])
+      : pitchingStats.map(p => [p.name, p.number, p.ip, p.earnedRuns, p.strikeouts, p.walks, p.era, p.bbPer9, p.kPer9])
 
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -259,6 +260,7 @@ function StatsContent() {
                   <tr className="bg-green-50">
                     <th className="text-left px-2 py-2 font-semibold text-gray-700">選手</th>
                     <th className="px-2 py-2 font-semibold text-gray-700">投球回</th>
+                    <th className="px-2 py-2 font-semibold text-gray-700">自責</th>
                     <th className="px-2 py-2 font-semibold text-gray-700">K</th>
                     <th className="px-2 py-2 font-semibold text-gray-700">BB</th>
                     <th className="px-2 py-2 font-semibold text-gray-700">防御率</th>
@@ -270,6 +272,7 @@ function StatsContent() {
                     <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                       <td className="px-2 py-2 font-semibold text-gray-900">#{p.number} {p.name}</td>
                       <td className="px-2 py-2 text-center text-gray-900">{p.ip}</td>
+                      <td className="px-2 py-2 text-center text-gray-900">{p.earnedRuns}</td>
                       <td className="px-2 py-2 text-center text-gray-900">{p.strikeouts}</td>
                       <td className="px-2 py-2 text-center text-gray-900">{p.walks}</td>
                       <td className="px-2 py-2 text-center font-bold text-gray-900">{p.era}</td>
