@@ -320,6 +320,34 @@ function RecordContent() {
     return { nextRunners, runsScored }
   }
 
+  function placeBatterWithCarry(baseRunners, batterId, destinationBase) {
+    const nextRunners = { ...baseRunners }
+    let runsScored = 0
+
+    if (destinationBase === '1塁') {
+      if (nextRunners['3塁']) runsScored += 1
+      nextRunners['3塁'] = nextRunners['2塁'] || null
+      nextRunners['2塁'] = nextRunners['1塁'] || null
+      nextRunners['1塁'] = batterId
+      return { nextRunners, runsScored }
+    }
+
+    if (destinationBase === '2塁') {
+      if (nextRunners['3塁']) runsScored += 1
+      nextRunners['3塁'] = nextRunners['2塁'] || null
+      nextRunners['2塁'] = batterId
+      return { nextRunners, runsScored }
+    }
+
+    if (destinationBase === '3塁') {
+      if (nextRunners['3塁']) runsScored += 1
+      nextRunners['3塁'] = batterId
+      return { nextRunners, runsScored }
+    }
+
+    return { nextRunners, runsScored }
+  }
+
   const activePlayerIds = new Set(starters.map((s) => s.playerId))
   const fpPlayerIds = new Set(dhFpPairs.map((p) => p.fpPlayerId))
   const benchPlayers = lineup.filter((l) => {
@@ -705,9 +733,19 @@ function RecordContent() {
       setActiveBatterRunnerId(batterRunnerId || '')
       let nextScore = isOurOffense ? scoreUs : scoreThem
       const isHomeRun = res === 'HR' || res === '走HR'
-      if (res === 'ヒット') nextRunners['1塁'] = batterRunnerId
-      else if (res === '2B' || res === 'エン2B') nextRunners['2塁'] = batterRunnerId
-      else if (res === '3B') nextRunners['3塁'] = batterRunnerId
+      if (res === 'ヒット') {
+        const placed = placeBatterWithCarry(runners, batterRunnerId, '1塁')
+        nextRunners = placed.nextRunners
+        nextScore += placed.runsScored
+      } else if (res === '2B' || res === 'エン2B') {
+        const placed = placeBatterWithCarry(runners, batterRunnerId, '2塁')
+        nextRunners = placed.nextRunners
+        nextScore += placed.runsScored
+      } else if (res === '3B') {
+        const placed = placeBatterWithCarry(runners, batterRunnerId, '3塁')
+        nextRunners = placed.nextRunners
+        nextScore += placed.runsScored
+      }
       else if (res === 'HR' || res === '走HR') {
         nextScore += 1 + Object.values(runners).filter((r) => r).length
         nextRunners = { '1塁': null, '2塁': null, '3塁': null }
