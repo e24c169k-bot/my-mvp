@@ -62,6 +62,8 @@ function RecordContent() {
   const [scoreThem, setScoreThem] = useState(0)
   const [hitsUs, setHitsUs] = useState(0)
   const [hitsThem, setHitsThem] = useState(0)
+  const [errorsUs, setErrorsUs] = useState(0)
+  const [errorsThem, setErrorsThem] = useState(0)
   const [inningScores, setInningScores] = useState({ top: {}, bottom: {} })
   const [lastPitchId, setLastPitchId] = useState(null)
   const [undoStack, setUndoStack] = useState([])
@@ -133,7 +135,9 @@ function RecordContent() {
   const bottomScore = isUsTop ? scoreThem : scoreUs
   const topHits = isUsTop ? hitsUs : hitsThem
   const bottomHits = isUsTop ? hitsThem : hitsUs
-  const lineScoreColumns = Array.from(
+  const topErrors = isUsTop ? errorsUs : errorsThem
+  const bottomErrors = isUsTop ? errorsThem : errorsUs
+  const lineScoreColumnsRaw = Array.from(
     new Set([
       ...Object.keys(inningScores.top || {}).map((k) => Number(k)),
       ...Object.keys(inningScores.bottom || {}).map((k) => Number(k)),
@@ -142,6 +146,8 @@ function RecordContent() {
   )
     .filter((n) => Number.isFinite(n) && n > 0)
     .sort((a, b) => a - b)
+  const maxCol = Math.max(7, ...lineScoreColumnsRaw, Number(inning || 1))
+  const lineScoreColumns = Array.from({ length: maxCol }, (_, i) => i + 1)
 
   useEffect(() => {
     initialize()
@@ -281,6 +287,8 @@ function RecordContent() {
     setMemoText(state.memoText || '')
     setHitsUs(state.hitsUs || 0)
     setHitsThem(state.hitsThem || 0)
+    setErrorsUs(state.errorsUs || 0)
+    setErrorsThem(state.errorsThem || 0)
     setInningScores(normalizeInningScores(state.inningScores))
 
     const stateDhFpPairs = Array.isArray(state.dhFpPairs) ? state.dhFpPairs : []
@@ -324,6 +332,8 @@ function RecordContent() {
       memoText: next.memoText ?? memoText,
       hitsUs: next.hitsUs ?? hitsUs,
       hitsThem: next.hitsThem ?? hitsThem,
+      errorsUs: next.errorsUs ?? errorsUs,
+      errorsThem: next.errorsThem ?? errorsThem,
       inningScores: next.inningScores ?? inningScores,
       dhFpPairs: next.dhFpPairs ?? dhFpPairs,
       appearedBenchPlayers: next.appearedBenchPlayers ?? Array.from(appearedBenchPlayers)
@@ -354,6 +364,8 @@ function RecordContent() {
       memoText,
       hitsUs,
       hitsThem,
+      errorsUs,
+      errorsThem,
       inningScores,
       dhFpPairs: [...dhFpPairs],
       appearedBenchPlayers: Array.from(appearedBenchPlayers),
@@ -377,6 +389,8 @@ function RecordContent() {
     setMemoText(snapshot.memoText || '')
     setHitsUs(snapshot.hitsUs || 0)
     setHitsThem(snapshot.hitsThem || 0)
+    setErrorsUs(snapshot.errorsUs || 0)
+    setErrorsThem(snapshot.errorsThem || 0)
     setInningScores(normalizeInningScores(snapshot.inningScores))
     setDhFpPairs(Array.isArray(snapshot.dhFpPairs) ? snapshot.dhFpPairs : [])
     setAppearedBenchPlayers(new Set(Array.isArray(snapshot.appearedBenchPlayers) ? snapshot.appearedBenchPlayers : []))
@@ -1198,6 +1212,8 @@ function RecordContent() {
     let nextRunners = { ...runners }
     let nextScore = isOurOffense ? scoreUs : scoreThem
     let nextInningScores = inningScores
+    let nextErrorsUs = errorsUs
+    let nextErrorsThem = errorsThem
     for (const base of ['1塁', '2塁', '3塁']) {
       if (nextRunners[base] === advanceRunner) nextRunners[base] = null
     }
@@ -1206,15 +1222,23 @@ function RecordContent() {
       nextInningScores = addRunsToLineScore(inningScores, inningHalf, inning, 1)
     }
     else nextRunners[advanceTo] = advanceRunner
+    if (advanceReason === 'エラー・野選') {
+      if (isOurOffense) nextErrorsThem += 1
+      else nextErrorsUs += 1
+    }
 
     setRunners(nextRunners)
     setInningScores(nextInningScores)
+    setErrorsUs(nextErrorsUs)
+    setErrorsThem(nextErrorsThem)
     if (isOurOffense) setScoreUs(nextScore)
     else setScoreThem(nextScore)
     persistGameState({
       runners: nextRunners,
       scoreUs: isOurOffense ? nextScore : scoreUs,
       scoreThem: isOurOffense ? scoreThem : nextScore,
+      errorsUs: nextErrorsUs,
+      errorsThem: nextErrorsThem,
       inningScores: nextInningScores
     })
 
@@ -1252,6 +1276,12 @@ function RecordContent() {
     const cnt = scoreRunners.length
     const nextScore = (isOurOffense ? scoreUs : scoreThem) + cnt
     const nextInningScores = addRunsToLineScore(inningScores, inningHalf, inning, cnt)
+    let nextErrorsUs = errorsUs
+    let nextErrorsThem = errorsThem
+    if (cnt > 0 && advanceReason === 'エラー・野選') {
+      if (isOurOffense) nextErrorsThem += 1
+      else nextErrorsUs += 1
+    }
     const nextRunners = { ...runners }
     for (const base of ['1塁', '2塁', '3塁']) {
       if (scoreRunners.includes(nextRunners[base])) nextRunners[base] = null
@@ -1259,11 +1289,15 @@ function RecordContent() {
     if (isOurOffense) setScoreUs(nextScore)
     else setScoreThem(nextScore)
     setInningScores(nextInningScores)
+    setErrorsUs(nextErrorsUs)
+    setErrorsThem(nextErrorsThem)
     setRunners(nextRunners)
     persistGameState({
       runners: nextRunners,
       scoreUs: isOurOffense ? nextScore : scoreUs,
       scoreThem: isOurOffense ? scoreThem : nextScore,
+      errorsUs: nextErrorsUs,
+      errorsThem: nextErrorsThem,
       inningScores: nextInningScores
     })
 
@@ -1437,6 +1471,8 @@ function RecordContent() {
           memoText: action.before.memoText || '',
           hitsUs: action.before.hitsUs || 0,
           hitsThem: action.before.hitsThem || 0,
+          errorsUs: action.before.errorsUs || 0,
+          errorsThem: action.before.errorsThem || 0,
           inningScores: normalizeInningScores(action.before.inningScores),
           dhFpPairs: Array.isArray(action.before.dhFpPairs) ? action.before.dhFpPairs : [],
           appearedBenchPlayers: Array.isArray(action.before.appearedBenchPlayers) ? action.before.appearedBenchPlayers : []
@@ -1579,8 +1615,9 @@ function RecordContent() {
                       {col}
                     </th>
                   ))}
-                  <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>R</th>
-                  <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>H</th>
+                  <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>計</th>
+                  <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>安</th>
+                  <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>失</th>
                 </tr>
               </thead>
               <tbody>
@@ -1593,6 +1630,7 @@ function RecordContent() {
                   ))}
                   <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topScore}</td>
                   <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topHits}</td>
+                  <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topErrors}</td>
                 </tr>
                 <tr>
                   <td className="py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>{bottomTeamName}</td>
@@ -1603,6 +1641,7 @@ function RecordContent() {
                   ))}
                   <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomScore}</td>
                   <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomHits}</td>
+                  <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomErrors}</td>
                 </tr>
               </tbody>
               </table>

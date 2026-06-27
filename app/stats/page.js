@@ -19,6 +19,11 @@ function normalizeInningScores(raw) {
   return base
 }
 
+function normalizeNumber(value) {
+  const n = Number(value || 0)
+  return Number.isFinite(n) ? n : 0
+}
+
 function StatsContent() {
   const searchParams = useSearchParams()
   const seasonId = searchParams.get('season')
@@ -31,6 +36,7 @@ function StatsContent() {
   const [pitchingStats, setPitchingStats] = useState([])
   const [targetGame, setTargetGame] = useState(null)
   const [scoreboardHits, setScoreboardHits] = useState({ us: 0, them: 0 })
+  const [scoreboardErrors, setScoreboardErrors] = useState({ us: 0, them: 0 })
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
   const isUsTop = (targetGame?.state_json?.usBattingTurn || 'first') === 'first'
@@ -40,8 +46,10 @@ function StatsContent() {
   const bottomScore = isUsTop ? (targetGame?.score_them || 0) : (targetGame?.score_us || 0)
   const topHits = isUsTop ? scoreboardHits.us : scoreboardHits.them
   const bottomHits = isUsTop ? scoreboardHits.them : scoreboardHits.us
+  const topErrors = isUsTop ? scoreboardErrors.us : scoreboardErrors.them
+  const bottomErrors = isUsTop ? scoreboardErrors.them : scoreboardErrors.us
   const normalizedInningScores = normalizeInningScores(targetGame?.state_json?.inningScores)
-  const lineScoreColumns = Array.from(
+  const lineScoreColumnsRaw = Array.from(
     new Set([
       ...Object.keys(normalizedInningScores.top || {}).map((k) => Number(k)),
       ...Object.keys(normalizedInningScores.bottom || {}).map((k) => Number(k))
@@ -49,6 +57,8 @@ function StatsContent() {
   )
     .filter((n) => Number.isFinite(n) && n > 0)
     .sort((a, b) => a - b)
+  const maxCol = Math.max(7, ...lineScoreColumnsRaw)
+  const lineScoreColumns = Array.from({ length: maxCol }, (_, i) => i + 1)
 
   useEffect(() => {
     initialize()
@@ -99,6 +109,7 @@ function StatsContent() {
       setBattingStats([])
       setPitchingStats([])
       setScoreboardHits({ us: 0, them: 0 })
+      setScoreboardErrors({ us: 0, them: 0 })
       setLoading(false)
       return
     }
@@ -106,8 +117,10 @@ function StatsContent() {
     setTargetGame(gameIdParam ? games[0] : null)
     if (gameIdParam) {
       const target = games[0]
-      const stateHitsUs = Number(target?.state_json?.hitsUs || 0)
-      const stateHitsThem = Number(target?.state_json?.hitsThem || 0)
+      const stateHitsUs = normalizeNumber(target?.state_json?.hitsUs)
+      const stateHitsThem = normalizeNumber(target?.state_json?.hitsThem)
+      const stateErrorsUs = normalizeNumber(target?.state_json?.errorsUs)
+      const stateErrorsThem = normalizeNumber(target?.state_json?.errorsThem)
       if (stateHitsUs > 0 || stateHitsThem > 0) {
         setScoreboardHits({ us: stateHitsUs, them: stateHitsThem })
       } else {
@@ -126,8 +139,10 @@ function StatsContent() {
           .in('result', HIT_RESULTS_ONLY)
         setScoreboardHits({ us: usHitsCount || 0, them: themHitsCount || 0 })
       }
+      setScoreboardErrors({ us: stateErrorsUs, them: stateErrorsThem })
     } else {
       setScoreboardHits({ us: 0, them: 0 })
+      setScoreboardErrors({ us: 0, them: 0 })
     }
     const gameIds = games.map(g => g.id)
 
@@ -267,8 +282,9 @@ function StatsContent() {
                         {col}
                       </th>
                     ))}
-                    <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>R</th>
-                    <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>H</th>
+                    <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>計</th>
+                    <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>安</th>
+                    <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>失</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -281,6 +297,7 @@ function StatsContent() {
                     ))}
                     <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topScore}</td>
                     <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topHits}</td>
+                    <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topErrors}</td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>{bottomTeamName}</td>
@@ -291,6 +308,7 @@ function StatsContent() {
                     ))}
                     <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomScore}</td>
                     <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomHits}</td>
+                    <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomErrors}</td>
                   </tr>
                 </tbody>
                 </table>
