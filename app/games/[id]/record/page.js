@@ -44,6 +44,7 @@ function RecordContent() {
   const [opponentRunnerSeq, setOpponentRunnerSeq] = useState(1)
   const [activeBatterRunnerId, setActiveBatterRunnerId] = useState('')
   const [opponentPitcherName, setOpponentPitcherName] = useState('')
+  const [dhFpPairs, setDhFpPairs] = useState([])
   const halfSwitchingRef = useRef(false)
 
   const [activeBatters, setActiveBatters] = useState([])
@@ -217,6 +218,7 @@ function RecordContent() {
     setRunners(state.runners || { '1塁': null, '2塁': null, '3塁': null })
     setBatterIndex(state.batterIndex || 0)
     setOpponentPitcherName(state.opponentPitcherName || '')
+    setDhFpPairs(Array.isArray(state.dhFpPairs) ? state.dhFpPairs : [])
     setLoading(false)
   }
 
@@ -319,8 +321,10 @@ function RecordContent() {
   }
 
   const activePlayerIds = new Set(starters.map((s) => s.playerId))
+  const fpPlayerIds = new Set(dhFpPairs.map((p) => p.fpPlayerId))
   const benchPlayers = lineup.filter((l) => {
     if (activePlayerIds.has(l.player_id)) return false
+    if (fpPlayerIds.has(l.player_id)) return false
     if (!l.is_starter) return true
     return benchedStarters.has(l.player_id) && !reentryUsed.has(l.player_id)
   })
@@ -1060,6 +1064,21 @@ function RecordContent() {
             })}
           </div>
         </div>
+
+        {dhFpPairs.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-3 text-xs text-blue-900">
+            <p className="font-semibold mb-1">DH / FP</p>
+            {dhFpPairs.map((pair, idx) => {
+              const dhName = lineup.find(l => l.player_id === pair.dhPlayerId)?.players?.name || 'DH'
+              const fpName = lineup.find(l => l.player_id === pair.fpPlayerId)?.players?.name || 'FP'
+              return (
+                <p key={`${pair.dhPlayerId}-${pair.fpPlayerId}-${idx}`}>
+                  {dhName} (DH) / {fpName} (FP:{pair.fpPosition})
+                </p>
+              )
+            })}
+          </div>
+        )}
 
         {panel === 'main' && (
           <div>

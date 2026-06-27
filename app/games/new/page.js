@@ -20,6 +20,7 @@ function NewGameContent() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [battingTurn, setBattingTurn] = useState('first') // first | second
   const [lineup, setLineup] = useState([])
+  const [dhFpMap, setDhFpMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -86,10 +87,55 @@ function NewGameContent() {
     ))
   }
 
+  function setDhFpPlayer(dhPlayerId, fpPlayerId) {
+    setDhFpMap(prev => ({
+      ...prev,
+      [dhPlayerId]: {
+        ...(prev[dhPlayerId] || {}),
+        fpPlayerId
+      }
+    }))
+  }
+
+  function setDhFpPosition(dhPlayerId, fpPosition) {
+    setDhFpMap(prev => ({
+      ...prev,
+      [dhPlayerId]: {
+        ...(prev[dhPlayerId] || {}),
+        fpPosition
+      }
+    }))
+  }
+
   async function createGame() {
     if (!opponent.trim() || !teamId) { alert('対戦相手を入力してください'); return }
     const starters = lineup.filter(l => l.isStarter)
     if (starters.length === 0) { alert('スタメンを1人以上選択してください'); return }
+
+    const dhStarters = starters.filter(s => s.position === 'DH')
+    const dhFpPairs = []
+    for (const dh of dhStarters) {
+      const conf = dhFpMap[dh.playerId]
+      if (!conf?.fpPlayerId || !conf?.fpPosition) {
+        alert('DHを使う場合はFP（守備専任選手）と守備位置を設定してください')
+        return
+      }
+      const fpInStarters = starters.some(s => s.playerId === conf.fpPlayerId)
+      if (fpInStarters) {
+        alert('FPは打順に入らない選手を選んでください（スタメン打者との重複不可）')
+        return
+      }
+      if (conf.fpPlayerId === dh.playerId) {
+        alert('DH本人をFPには設定できません')
+        return
+      }
+      dhFpPairs.push({
+        dhPlayerId: dh.playerId,
+        fpPlayerId: conf.fpPlayerId,
+        fpPosition: conf.fpPosition
+      })
+    }
+
     setSaving(true)
     setErrorMsg('')
 
@@ -102,7 +148,8 @@ function NewGameContent() {
       runners: { '1塁': null, '2塁': null, '3塁': null },
       batterIndex: 0,
       usBattingTurn: battingTurn,
-      opponentPitcherName: opponentPitcherName.trim()
+      opponentPitcherName: opponentPitcherName.trim(),
+      dhFpPairs
     }
 
     const { data: game, error: gameError } = await supabase
@@ -135,6 +182,17 @@ function NewGameContent() {
         position: l.isStarter ? l.position : '',
         is_starter: l.isStarter
       }))
+      // Add FP (fielding-only players) rows as non-starters.
+      for (const pair of dhFpPairs) {
+        lineupData.push({
+          game_id: game.id,
+          team_id: teamId,
+          player_id: pair.fpPlayerId,
+          batting_order: 0,
+          position: `FP:${pair.fpPosition}`,
+          is_starter: false
+        })
+      }
       const { error: lineupError } = await supabase.from('lineups').insert(lineupData)
       if (lineupError) {
         setErrorMsg(lineupError.message)
@@ -214,8 +272,14 @@ function NewGameContent() {
             </div>
             {players.map((player, i) => {
               const l = lineup.find(l => l.playerId === player.id)
+              const fpConf = dhFpMap[player.id] || { fpPlayerId: '', fpPosition: '' }
+              const fpCandidates = players.filter(p =>
+                p.id !== player.id &&
+                (!lineup.find(x => x.playerId === p.id)?.isStarter || fpConf.fpPlayerId === p.id)
+              )
               return (
-                <div key={player.id} className={`grid grid-cols-12 items-center px-3 py-2 text-sm ${i > 0 ? 'border-t border-gray-100' : ''} ${l?.isStarter ? 'bg-green-50' : ''}`}>
+                <div key={player.id} className={`${i > 0 ? 'border-t border-gray-100' : ''} ${l?.isStarter ? 'bg-green-50' : ''}`}>
+                  <div className="grid grid-cols-12 items-center px-3 py-2 text-sm">
                   <div className="col-span-1">
                     <input type="checkbox" checked={l?.isStarter || false}
                       onChange={() => toggleStarter(player.id)}
@@ -241,6 +305,36 @@ function NewGameContent() {
                       </select>
                     )}
                   </div>
+                  </div>
+                  {l?.isStarter && l?.position === 'DH' && (
+                    <div className="px-3 pb-3">
+                      <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                        <p className="text-[11px] text-blue-700 mb-2">DH使用時は守備専任のFPを設定してください</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <select
+                            value={fpConf.fpPlayerId || ''}
+                            onChange={e => setDhFpPlayer(player.id, e.target.value)}
+                            className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                          >
+                            <option value="">FP選手を選択</option>
+                            {fpCandidates.map(p => (
+                              <option key={p.id} value={p.id}>#{p.number} {p.name}</option>
+                            ))}
+                          </select>
+                          <select
+                            value={fpConf.fpPosition || ''}
+                            onChange={e => setDhFpPosition(player.id, e.target.value)}
+                            className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                          >
+                            <option value="">守備位置</option>
+                            {positions.filter(pos => pos !== 'DH').map(pos => (
+                              <option key={pos} value={pos}>{pos}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
