@@ -1516,24 +1516,24 @@ function RecordContent() {
 
           <div className="mt-3 bg-black/40 border-2 border-white/70 rounded-lg p-2 !text-white" style={{ color: '#fff' }}>
             <p className="text-[11px] !text-white mb-1 font-semibold" style={{ color: '#fff' }}>スコアボード</p>
-            <table className="w-full text-xs !text-white" style={{ color: '#fff' }}>
+            <table className="w-full text-xs !text-white border border-white/80 border-collapse" style={{ color: '#fff' }}>
               <thead>
                 <tr className="!text-white" style={{ color: '#fff' }}>
-                  <th className="text-left font-semibold py-1 !text-white" style={{ color: '#fff' }}>TEAM</th>
-                  <th className="text-right font-semibold py-1 !text-white" style={{ color: '#fff' }}>R</th>
-                  <th className="text-right font-semibold py-1 !text-white" style={{ color: '#fff' }}>H</th>
+                  <th className="text-left font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>TEAM</th>
+                  <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>R</th>
+                  <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>H</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td className="py-1 !text-white" style={{ color: '#fff' }}>{topTeamName}</td>
-                  <td className="py-1 text-right font-bold !text-white" style={{ color: '#fff' }}>{topScore}</td>
-                  <td className="py-1 text-right font-bold !text-white" style={{ color: '#fff' }}>{topHits}</td>
+                  <td className="py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>{topTeamName}</td>
+                  <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topScore}</td>
+                  <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topHits}</td>
                 </tr>
                 <tr>
-                  <td className="py-1 !text-white" style={{ color: '#fff' }}>{bottomTeamName}</td>
-                  <td className="py-1 text-right font-bold !text-white" style={{ color: '#fff' }}>{bottomScore}</td>
-                  <td className="py-1 text-right font-bold !text-white" style={{ color: '#fff' }}>{bottomHits}</td>
+                  <td className="py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>{bottomTeamName}</td>
+                  <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomScore}</td>
+                  <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomHits}</td>
                 </tr>
               </tbody>
             </table>
