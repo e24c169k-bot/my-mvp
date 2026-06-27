@@ -51,7 +51,7 @@ function RecordContent() {
   const [activeBatters, setActiveBatters] = useState([])
   const [reentryUsed, setReentryUsed] = useState(new Set())
   const [benchedStarters, setBenchedStarters] = useState(new Set())
-  const [usedBenchPlayers, setUsedBenchPlayers] = useState(new Set())
+  const [appearedBenchPlayers, setAppearedBenchPlayers] = useState(new Set())
   const [subTarget, setSubTarget] = useState(null)
   const [defenseSubTarget, setDefenseSubTarget] = useState(null)
   const [defenseSubPosition, setDefenseSubPosition] = useState('')
@@ -238,7 +238,7 @@ function RecordContent() {
     setBatterIndex(state.batterIndex || 0)
     setOpponentPitcherName(state.opponentPitcherName || '')
     setDhFpPairs(Array.isArray(state.dhFpPairs) ? state.dhFpPairs : [])
-    setUsedBenchPlayers(new Set(Array.isArray(state.usedBenchPlayers) ? state.usedBenchPlayers : []))
+    setAppearedBenchPlayers(new Set(Array.isArray(state.appearedBenchPlayers) ? state.appearedBenchPlayers : []))
     setLoading(false)
   }
 
@@ -255,7 +255,7 @@ function RecordContent() {
       batterIndex: next.batterIndex ?? batterIndex,
       opponentPitcherName: next.opponentPitcherName ?? opponentPitcherName,
       dhFpPairs: next.dhFpPairs ?? dhFpPairs,
-      usedBenchPlayers: next.usedBenchPlayers ?? Array.from(usedBenchPlayers)
+      appearedBenchPlayers: next.appearedBenchPlayers ?? Array.from(appearedBenchPlayers)
     }
     const { error } = await supabase
       .from('games')
@@ -281,7 +281,7 @@ function RecordContent() {
       batterIndex,
       opponentPitcherName,
       dhFpPairs: [...dhFpPairs],
-      usedBenchPlayers: Array.from(usedBenchPlayers),
+      appearedBenchPlayers: Array.from(appearedBenchPlayers),
       scoreUs,
       scoreThem,
       lastPitchId,
@@ -300,7 +300,7 @@ function RecordContent() {
     setBatterIndex(snapshot.batterIndex)
     setOpponentPitcherName(snapshot.opponentPitcherName || '')
     setDhFpPairs(Array.isArray(snapshot.dhFpPairs) ? snapshot.dhFpPairs : [])
-    setUsedBenchPlayers(new Set(Array.isArray(snapshot.usedBenchPlayers) ? snapshot.usedBenchPlayers : []))
+    setAppearedBenchPlayers(new Set(Array.isArray(snapshot.appearedBenchPlayers) ? snapshot.appearedBenchPlayers : []))
     setScoreUs(snapshot.scoreUs)
     setScoreThem(snapshot.scoreThem)
     setLastPitchId(snapshot.lastPitchId || null)
@@ -393,16 +393,16 @@ function RecordContent() {
   const benchPlayers = lineup.filter((l) => {
     if (activePlayerIds.has(l.player_id)) return false
     if (fpPlayerIds.has(l.player_id)) return false
-    if (!l.is_starter) return !usedBenchPlayers.has(l.player_id)
+    if (!l.is_starter) return !appearedBenchPlayers.has(l.player_id)
     return benchedStarters.has(l.player_id) && !reentryUsed.has(l.player_id)
   })
 
-  function markBenchPlayerUsed(playerId) {
+  function markBenchPlayerAppeared(playerId) {
     if (!playerId) return
-    setUsedBenchPlayers((prev) => {
+    setAppearedBenchPlayers((prev) => {
       if (prev.has(playerId)) return prev
       const next = new Set([...prev, playerId])
-      persistGameState({ usedBenchPlayers: Array.from(next) })
+      persistGameState({ appearedBenchPlayers: Array.from(next) })
       return next
     })
   }
@@ -426,7 +426,7 @@ function RecordContent() {
     )
 
     if (outgoing?.isStarter) setBenchedStarters((prev) => new Set([...prev, outgoing.playerId]))
-    else if (outgoing?.playerId) markBenchPlayerUsed(outgoing.playerId)
+    if (incomingLineup && !incomingLineup.is_starter) markBenchPlayerAppeared(newPlayerId)
     if (benchedStarters.has(newPlayerId)) setReentryUsed((prev) => new Set([...prev, newPlayerId]))
 
     setRunners((prev) => {
@@ -470,8 +470,7 @@ function RecordContent() {
     }
 
     if (outgoing?.isStarter) setBenchedStarters((prev) => new Set([...prev, outgoing.playerId]))
-    else if (outgoing?.playerId) markBenchPlayerUsed(outgoing.playerId)
-    else if (outgoingIsFp && defenseSubTarget) markBenchPlayerUsed(defenseSubTarget)
+    if (incomingLineup && !incomingLineup.is_starter) markBenchPlayerAppeared(newPlayerId)
     if (benchedStarters.has(newPlayerId)) setReentryUsed((prev) => new Set([...prev, newPlayerId]))
 
     let nextDhFpPairs = dhFpPairs
@@ -579,7 +578,7 @@ function RecordContent() {
     }
 
     if (outgoing?.isStarter) setBenchedStarters((prev) => new Set([...prev, outgoing.playerId]))
-    else if (outgoing?.playerId) markBenchPlayerUsed(outgoing.playerId)
+    if (incomingLineup && !incomingLineup.is_starter) markBenchPlayerAppeared(newPlayerId)
     if (benchedStarters.has(newPlayerId)) setReentryUsed((prev) => new Set([...prev, newPlayerId]))
 
     const nextRunners = { ...runners, [runnerSubTargetBase]: newPlayerId }
@@ -1185,7 +1184,7 @@ function RecordContent() {
           batterIndex: action.before.batterIndex,
           opponentPitcherName: action.before.opponentPitcherName || '',
           dhFpPairs: Array.isArray(action.before.dhFpPairs) ? action.before.dhFpPairs : [],
-          usedBenchPlayers: Array.isArray(action.before.usedBenchPlayers) ? action.before.usedBenchPlayers : []
+          appearedBenchPlayers: Array.isArray(action.before.appearedBenchPlayers) ? action.before.appearedBenchPlayers : []
         }
       })
       .eq('id', gameId)
