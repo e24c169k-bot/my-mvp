@@ -236,30 +236,30 @@ function StatsContent() {
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
             <p className="text-xs text-gray-500">対象試合</p>
             <p className="text-sm font-semibold text-gray-900">{targetGame.date} vs {targetGame.opponent}</p>
-            <div className="mt-2 bg-green-900 border-2 border-white rounded p-2">
-              <p className="text-[11px] text-white mb-1 font-semibold">スコアボード</p>
-              <table className="w-full text-xs text-white">
+            <div className="mt-2 bg-green-900 border-2 border-white rounded p-2 !text-white" style={{ color: '#fff' }}>
+              <p className="text-[11px] !text-white mb-1 font-semibold" style={{ color: '#fff' }}>スコアボード</p>
+              <table className="w-full text-xs !text-white" style={{ color: '#fff' }}>
                 <thead>
-                  <tr className="text-white">
-                    <th className="text-left font-semibold py-1">TEAM</th>
-                    <th className="text-right font-semibold py-1">R</th>
-                    <th className="text-right font-semibold py-1">H</th>
+                  <tr className="!text-white" style={{ color: '#fff' }}>
+                    <th className="text-left font-semibold py-1 !text-white" style={{ color: '#fff' }}>TEAM</th>
+                    <th className="text-right font-semibold py-1 !text-white" style={{ color: '#fff' }}>R</th>
+                    <th className="text-right font-semibold py-1 !text-white" style={{ color: '#fff' }}>H</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td className="py-1">{topTeamName}</td>
-                    <td className="py-1 text-right font-bold">{topScore}</td>
-                    <td className="py-1 text-right font-bold">{topHits}</td>
+                    <td className="py-1 !text-white" style={{ color: '#fff' }}>{topTeamName}</td>
+                    <td className="py-1 text-right font-bold !text-white" style={{ color: '#fff' }}>{topScore}</td>
+                    <td className="py-1 text-right font-bold !text-white" style={{ color: '#fff' }}>{topHits}</td>
                   </tr>
                   <tr>
-                    <td className="py-1">{bottomTeamName}</td>
-                    <td className="py-1 text-right font-bold">{bottomScore}</td>
-                    <td className="py-1 text-right font-bold">{bottomHits}</td>
+                    <td className="py-1 !text-white" style={{ color: '#fff' }}>{bottomTeamName}</td>
+                    <td className="py-1 text-right font-bold !text-white" style={{ color: '#fff' }}>{bottomScore}</td>
+                    <td className="py-1 text-right font-bold !text-white" style={{ color: '#fff' }}>{bottomHits}</td>
                   </tr>
                 </tbody>
               </table>
-              <p className="text-[10px] text-white mt-1">
+              <p className="text-[10px] !text-white mt-1" style={{ color: '#fff' }}>
                 イニング: {targetGame?.state_json?.inning || '-'}回{targetGame?.state_json?.inningHalf === 'bottom' ? '裏' : '表'}
               </p>
             </div>
