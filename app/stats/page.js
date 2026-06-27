@@ -24,6 +24,13 @@ function normalizeNumber(value) {
   return Number.isFinite(n) ? n : 0
 }
 
+function getInningScoreTotal(raw) {
+  const normalized = normalizeInningScores(raw)
+  const topTotal = Object.values(normalized.top).reduce((sum, n) => sum + Number(n || 0), 0)
+  const bottomTotal = Object.values(normalized.bottom).reduce((sum, n) => sum + Number(n || 0), 0)
+  return topTotal + bottomTotal
+}
+
 function StatsContent() {
   const searchParams = useSearchParams()
   const seasonId = searchParams.get('season')
@@ -49,6 +56,7 @@ function StatsContent() {
   const topErrors = isUsTop ? scoreboardErrors.us : scoreboardErrors.them
   const bottomErrors = isUsTop ? scoreboardErrors.them : scoreboardErrors.us
   const normalizedInningScores = normalizeInningScores(targetGame?.state_json?.inningScores)
+  const needLineScoreFallback = targetGame && getInningScoreTotal(normalizedInningScores) === 0 && ((targetGame?.score_us || 0) + (targetGame?.score_them || 0) > 0)
   const lineScoreColumnsRaw = Array.from(
     new Set([
       ...Object.keys(normalizedInningScores.top || {}).map((k) => Number(k)),
@@ -316,6 +324,11 @@ function StatsContent() {
               <p className="text-[10px] !text-white mt-1" style={{ color: '#fff' }}>
                 イニング: {targetGame?.state_json?.inning || '-'}回{targetGame?.state_json?.inningHalf === 'bottom' ? '裏' : '表'}
               </p>
+              {needLineScoreFallback && (
+                <p className="text-[10px] !text-white mt-1" style={{ color: '#fff' }}>
+                  ※過去データのため、イニング別得点は次回入力以降に反映されます
+                </p>
+              )}
             </div>
             {targetGame?.state_json?.memoText && (
               <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded p-2">

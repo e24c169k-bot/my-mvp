@@ -36,6 +36,13 @@ function addRunsToLineScore(current, inningHalf, inningNumber, addRuns) {
   return next
 }
 
+function getInningScoreTotal(raw) {
+  const normalized = normalizeInningScores(raw)
+  const topTotal = Object.values(normalized.top).reduce((sum, n) => sum + Number(n || 0), 0)
+  const bottomTotal = Object.values(normalized.bottom).reduce((sum, n) => sum + Number(n || 0), 0)
+  return topTotal + bottomTotal
+}
+
 function RecordContent() {
   const { id: gameId } = useParams()
   const searchParams = useSearchParams()
@@ -289,7 +296,19 @@ function RecordContent() {
     setHitsThem(state.hitsThem || 0)
     setErrorsUs(state.errorsUs || 0)
     setErrorsThem(state.errorsThem || 0)
-    setInningScores(normalizeInningScores(state.inningScores))
+    const initialInningScores = normalizeInningScores(state.inningScores)
+    const needRebuildInningScores = getInningScoreTotal(initialInningScores) === 0 && ((g?.score_us || 0) + (g?.score_them || 0) > 0)
+    if (needRebuildInningScores) {
+      const rebuilt = await rebuildInningScoresFromEvents(team.team_id)
+      setInningScores(rebuilt)
+      if (getInningScoreTotal(rebuilt) > 0) {
+        persistGameState({ inningScores: rebuilt })
+      } else {
+        setInningScores(initialInningScores)
+      }
+    } else {
+      setInningScores(initialInningScores)
+    }
 
     const stateDhFpPairs = Array.isArray(state.dhFpPairs) ? state.dhFpPairs : []
     if (stateDhFpPairs.length > 0) {
@@ -315,6 +334,36 @@ function RecordContent() {
     }
     setAppearedBenchPlayers(new Set(Array.isArray(state.appearedBenchPlayers) ? state.appearedBenchPlayers : []))
     setLoading(false)
+  }
+
+  async function rebuildInningScoresFromEvents(currentTeamId) {
+    const empty = { top: {}, bottom: {} }
+    const { data: pitchRows, error: pitchError } = await supabase
+      .from('pitches')
+      .select('id, inning, inning_half')
+      .eq('game_id', gameId)
+      .eq('team_id', currentTeamId)
+    if (pitchError || !pitchRows || pitchRows.length === 0) return empty
+
+    const pitchById = new Map(pitchRows.map((p) => [p.id, p]))
+    const pitchIds = pitchRows.map((p) => p.id)
+    const { data: scoreRows, error: scoreError } = await supabase
+      .from('runner_advances')
+      .select('pitch_id')
+      .eq('team_id', currentTeamId)
+      .eq('to_base', '本塁')
+      .in('pitch_id', pitchIds)
+    if (scoreError || !scoreRows || scoreRows.length === 0) return empty
+
+    const next = { top: {}, bottom: {} }
+    for (const row of scoreRows) {
+      const pitch = pitchById.get(row.pitch_id)
+      if (!pitch) continue
+      const half = pitch.inning_half === 'bottom' ? 'bottom' : 'top'
+      const inningKey = String(pitch.inning || 1)
+      next[half][inningKey] = (next[half][inningKey] || 0) + 1
+    }
+    return next
   }
 
   async function persistGameState(next) {
