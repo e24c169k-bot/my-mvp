@@ -103,6 +103,11 @@ function RecordContent() {
   const isOurOffense =
     (usBattingTurn === 'first' && inningHalf === 'top') ||
     (usBattingTurn === 'second' && inningHalf === 'bottom')
+  const isUsTop = usBattingTurn === 'first'
+  const topTeamName = isUsTop ? '自チーム' : (game?.opponent || '相手')
+  const bottomTeamName = isUsTop ? (game?.opponent || '相手') : '自チーム'
+  const topScore = isUsTop ? scoreUs : scoreThem
+  const bottomScore = isUsTop ? scoreThem : scoreUs
 
   useEffect(() => {
     initialize()
@@ -1481,6 +1486,31 @@ function RecordContent() {
                 </div>
               )
             })}
+          </div>
+
+          <div className="mt-3 bg-black/30 rounded-lg p-2">
+            <p className="text-[11px] text-green-200 mb-1">スコアボード</p>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-white/80">
+                  <th className="text-left font-semibold py-1">TEAM</th>
+                  <th className="text-right font-semibold py-1">R</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="py-1">{topTeamName}</td>
+                  <td className="py-1 text-right font-bold">{topScore}</td>
+                </tr>
+                <tr>
+                  <td className="py-1">{bottomTeamName}</td>
+                  <td className="py-1 text-right font-bold">{bottomScore}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="text-[10px] text-white/70 mt-1">
+              {inning}回{inningHalf === 'top' ? '表' : '裏'} / {outs}アウト
+            </p>
           </div>
         </div>
 

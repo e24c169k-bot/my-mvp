@@ -20,6 +20,11 @@ function StatsContent() {
   const [targetGame, setTargetGame] = useState(null)
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
+  const isUsTop = (targetGame?.state_json?.usBattingTurn || 'first') === 'first'
+  const topTeamName = isUsTop ? '自チーム' : (targetGame?.opponent || '相手')
+  const bottomTeamName = isUsTop ? (targetGame?.opponent || '相手') : '自チーム'
+  const topScore = isUsTop ? (targetGame?.score_us || 0) : (targetGame?.score_them || 0)
+  const bottomScore = isUsTop ? (targetGame?.score_them || 0) : (targetGame?.score_us || 0)
 
   useEffect(() => {
     initialize()
@@ -200,7 +205,27 @@ function StatsContent() {
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
             <p className="text-xs text-gray-500">対象試合</p>
             <p className="text-sm font-semibold text-gray-900">{targetGame.date} vs {targetGame.opponent}</p>
-            <p className="text-lg font-bold text-green-900 mt-1">{targetGame.score_us} - {targetGame.score_them}</p>
+            <div className="mt-2 bg-white border border-green-200 rounded p-2">
+              <p className="text-[11px] text-green-700 mb-1">スコアボード</p>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-gray-600">
+                    <th className="text-left font-semibold py-1">TEAM</th>
+                    <th className="text-right font-semibold py-1">R</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="py-1 text-gray-900">{topTeamName}</td>
+                    <td className="py-1 text-right font-bold text-gray-900">{topScore}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 text-gray-900">{bottomTeamName}</td>
+                    <td className="py-1 text-right font-bold text-gray-900">{bottomScore}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             {targetGame?.state_json?.memoText && (
               <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded p-2">
                 <p className="text-[11px] text-yellow-700 font-semibold mb-1">メモ</p>
