@@ -1450,9 +1450,12 @@ function RecordContent() {
             {dhFpPairs.map((pair, idx) => {
               const dhName = lineup.find(l => l.player_id === pair.dhPlayerId)?.players?.name || 'DH'
               const fpName = lineup.find(l => l.player_id === pair.fpPlayerId)?.players?.name || 'FP'
+              const currentFielderId = getDhFpFielderId(pair)
+              const currentFielderName = lineup.find(l => l.player_id === currentFielderId)?.players?.name
+                || (currentFielderId === pair.dhPlayerId ? dhName : fpName)
               return (
                 <p key={`${pair.dhPlayerId}-${pair.fpPlayerId}-${idx}`}>
-                  {dhName} (DH) / {fpName} (FP:{pair.fpPosition})
+                  {dhName} (DH) / {fpName} (FP:{pair.fpPosition}) ・現在守備: {currentFielderName}
                 </p>
               )
             })}
