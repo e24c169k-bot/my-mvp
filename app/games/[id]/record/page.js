@@ -89,6 +89,8 @@ function RecordContent() {
   const getDefenderIdByPosition = (position) => {
     const fp = dhFpPairs.find((p) => p.fpPosition === position)
     if (fp?.fpPlayerId) return fp.fpPlayerId
+    const fpLineupEntry = lineup.find((l) => l.position === `FP:${position}`)
+    if (fpLineupEntry?.player_id) return fpLineupEntry.player_id
     return starters.find((s) => s.position === position)?.playerId || null
   }
   const effectivePitcherId = getDefenderIdByPosition('P') || pitcherId || null
@@ -221,7 +223,7 @@ function RecordContent() {
       }))
     )
 
-    const pitcherEntry = normalizedLineup.find((x) => x.position === 'P')
+    const pitcherEntry = normalizedLineup.find((x) => x.position === 'P') || normalizedLineup.find((x) => x.position === 'FP:P')
     if (pitcherEntry) setPitcherId(pitcherEntry.player_id)
 
     const state = g?.state_json || {}
@@ -249,7 +251,8 @@ function RecordContent() {
       outs: next.outs ?? outs,
       runners: next.runners ?? runners,
       batterIndex: next.batterIndex ?? batterIndex,
-      opponentPitcherName: next.opponentPitcherName ?? opponentPitcherName
+      opponentPitcherName: next.opponentPitcherName ?? opponentPitcherName,
+      dhFpPairs: next.dhFpPairs ?? dhFpPairs
     }
     const { error } = await supabase
       .from('games')
@@ -274,6 +277,7 @@ function RecordContent() {
       runners: { ...runners },
       batterIndex,
       opponentPitcherName,
+      dhFpPairs: [...dhFpPairs],
       scoreUs,
       scoreThem,
       lastPitchId,
@@ -291,6 +295,7 @@ function RecordContent() {
     setRunners(snapshot.runners)
     setBatterIndex(snapshot.batterIndex)
     setOpponentPitcherName(snapshot.opponentPitcherName || '')
+    setDhFpPairs(Array.isArray(snapshot.dhFpPairs) ? snapshot.dhFpPairs : [])
     setScoreUs(snapshot.scoreUs)
     setScoreThem(snapshot.scoreThem)
     setLastPitchId(snapshot.lastPitchId || null)
@@ -1071,7 +1076,8 @@ function RecordContent() {
           outs: action.before.outs,
           runners: action.before.runners,
           batterIndex: action.before.batterIndex,
-          opponentPitcherName: action.before.opponentPitcherName || ''
+          opponentPitcherName: action.before.opponentPitcherName || '',
+          dhFpPairs: Array.isArray(action.before.dhFpPairs) ? action.before.dhFpPairs : []
         }
       })
       .eq('id', gameId)
