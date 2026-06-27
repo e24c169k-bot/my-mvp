@@ -17,6 +17,25 @@ const BASES = ['1塁', '2塁', '3塁', '本塁']
 const BASE_ORDER = ['1塁', '2塁', '3塁', '本塁']
 const MAX_BALLS_BEFORE_WALK = 4
 
+function normalizeInningScores(raw) {
+  const base = { top: {}, bottom: {} }
+  if (!raw || typeof raw !== 'object') return base
+  const top = raw.top && typeof raw.top === 'object' ? raw.top : {}
+  const bottom = raw.bottom && typeof raw.bottom === 'object' ? raw.bottom : {}
+  for (const [k, v] of Object.entries(top)) base.top[String(k)] = Number(v || 0)
+  for (const [k, v] of Object.entries(bottom)) base.bottom[String(k)] = Number(v || 0)
+  return base
+}
+
+function addRunsToLineScore(current, inningHalf, inningNumber, addRuns) {
+  if (!addRuns || addRuns <= 0) return current
+  const next = normalizeInningScores(current)
+  const halfKey = inningHalf === 'bottom' ? 'bottom' : 'top'
+  const key = String(inningNumber)
+  next[halfKey][key] = (next[halfKey][key] || 0) + addRuns
+  return next
+}
+
 function RecordContent() {
   const { id: gameId } = useParams()
   const searchParams = useSearchParams()
@@ -43,6 +62,7 @@ function RecordContent() {
   const [scoreThem, setScoreThem] = useState(0)
   const [hitsUs, setHitsUs] = useState(0)
   const [hitsThem, setHitsThem] = useState(0)
+  const [inningScores, setInningScores] = useState({ top: {}, bottom: {} })
   const [lastPitchId, setLastPitchId] = useState(null)
   const [undoStack, setUndoStack] = useState([])
   const [opponentRunnerSeq, setOpponentRunnerSeq] = useState(1)
@@ -113,6 +133,15 @@ function RecordContent() {
   const bottomScore = isUsTop ? scoreThem : scoreUs
   const topHits = isUsTop ? hitsUs : hitsThem
   const bottomHits = isUsTop ? hitsThem : hitsUs
+  const lineScoreColumns = Array.from(
+    new Set([
+      ...Object.keys(inningScores.top || {}).map((k) => Number(k)),
+      ...Object.keys(inningScores.bottom || {}).map((k) => Number(k)),
+      Number(inning || 1)
+    ])
+  )
+    .filter((n) => Number.isFinite(n) && n > 0)
+    .sort((a, b) => a - b)
 
   useEffect(() => {
     initialize()
@@ -252,6 +281,7 @@ function RecordContent() {
     setMemoText(state.memoText || '')
     setHitsUs(state.hitsUs || 0)
     setHitsThem(state.hitsThem || 0)
+    setInningScores(normalizeInningScores(state.inningScores))
 
     const stateDhFpPairs = Array.isArray(state.dhFpPairs) ? state.dhFpPairs : []
     if (stateDhFpPairs.length > 0) {
@@ -294,6 +324,7 @@ function RecordContent() {
       memoText: next.memoText ?? memoText,
       hitsUs: next.hitsUs ?? hitsUs,
       hitsThem: next.hitsThem ?? hitsThem,
+      inningScores: next.inningScores ?? inningScores,
       dhFpPairs: next.dhFpPairs ?? dhFpPairs,
       appearedBenchPlayers: next.appearedBenchPlayers ?? Array.from(appearedBenchPlayers)
     }
@@ -323,6 +354,7 @@ function RecordContent() {
       memoText,
       hitsUs,
       hitsThem,
+      inningScores,
       dhFpPairs: [...dhFpPairs],
       appearedBenchPlayers: Array.from(appearedBenchPlayers),
       scoreUs,
@@ -345,6 +377,7 @@ function RecordContent() {
     setMemoText(snapshot.memoText || '')
     setHitsUs(snapshot.hitsUs || 0)
     setHitsThem(snapshot.hitsThem || 0)
+    setInningScores(normalizeInningScores(snapshot.inningScores))
     setDhFpPairs(Array.isArray(snapshot.dhFpPairs) ? snapshot.dhFpPairs : [])
     setAppearedBenchPlayers(new Set(Array.isArray(snapshot.appearedBenchPlayers) ? snapshot.appearedBenchPlayers : []))
     setScoreUs(snapshot.scoreUs)
@@ -923,13 +956,16 @@ function RecordContent() {
         const { nextRunners, runsScored, scoredRunnerIds } = forceAdvanceOnWalk(runners, batterRunnerId)
         const nextIndex = nextBatter()
         const nextScore = isOurOffense ? scoreUs + runsScored : scoreThem + runsScored
+        const nextInningScores = addRunsToLineScore(inningScores, inningHalf, inning, runsScored)
         setRunners(nextRunners)
+        setInningScores(nextInningScores)
         if (isOurOffense) setScoreUs(nextScore)
         else setScoreThem(nextScore)
         persistGameState({
           runners: nextRunners,
           scoreUs: isOurOffense ? nextScore : scoreUs,
           scoreThem: isOurOffense ? scoreThem : nextScore,
+          inningScores: nextInningScores,
           balls: 0,
           strikes: 0,
           batterIndex: nextIndex
@@ -956,13 +992,16 @@ function RecordContent() {
       const { nextRunners, runsScored, scoredRunnerIds } = forceAdvanceOnWalk(runners, batterRunnerId)
       const nextScore = isOurOffense ? scoreUs + runsScored : scoreThem + runsScored
       const nextIndex = nextBatter()
+      const nextInningScores = addRunsToLineScore(inningScores, inningHalf, inning, runsScored)
       setRunners(nextRunners)
+      setInningScores(nextInningScores)
       if (isOurOffense) setScoreUs(nextScore)
       else setScoreThem(nextScore)
       persistGameState({
         runners: nextRunners,
         scoreUs: isOurOffense ? nextScore : scoreUs,
         scoreThem: isOurOffense ? scoreThem : nextScore,
+        inningScores: nextInningScores,
         balls: 0,
         strikes: 0,
         batterIndex: nextIndex
@@ -1046,6 +1085,7 @@ function RecordContent() {
       const batterRunnerId = isOurOffense ? batter?.playerId : createOpponentRunnerId()
       setActiveBatterRunnerId(batterRunnerId || '')
       let nextScore = isOurOffense ? scoreUs : scoreThem
+      let nextInningScores = inningScores
       let nextHitsUs = hitsUs
       let nextHitsThem = hitsThem
       const isHomeRun = res === 'HR' || res === '走HR'
@@ -1080,6 +1120,8 @@ function RecordContent() {
       setRunners(nextRunners)
       setHitsUs(nextHitsUs)
       setHitsThem(nextHitsThem)
+      nextInningScores = addRunsToLineScore(inningScores, inningHalf, inning, nextScore - (isOurOffense ? scoreUs : scoreThem))
+      setInningScores(nextInningScores)
       if (isOurOffense) setScoreUs(nextScore)
       else setScoreThem(nextScore)
       persistGameState({
@@ -1088,6 +1130,7 @@ function RecordContent() {
         scoreThem: isOurOffense ? scoreThem : nextScore,
         hitsUs: nextHitsUs,
         hitsThem: nextHitsThem,
+        inningScores: nextInningScores,
         balls: 0,
         strikes: 0,
         batterIndex: nextIndex
@@ -1154,19 +1197,25 @@ function RecordContent() {
 
     let nextRunners = { ...runners }
     let nextScore = isOurOffense ? scoreUs : scoreThem
+    let nextInningScores = inningScores
     for (const base of ['1塁', '2塁', '3塁']) {
       if (nextRunners[base] === advanceRunner) nextRunners[base] = null
     }
-    if (advanceTo === '本塁') nextScore += 1
+    if (advanceTo === '本塁') {
+      nextScore += 1
+      nextInningScores = addRunsToLineScore(inningScores, inningHalf, inning, 1)
+    }
     else nextRunners[advanceTo] = advanceRunner
 
     setRunners(nextRunners)
+    setInningScores(nextInningScores)
     if (isOurOffense) setScoreUs(nextScore)
     else setScoreThem(nextScore)
     persistGameState({
       runners: nextRunners,
       scoreUs: isOurOffense ? nextScore : scoreUs,
-      scoreThem: isOurOffense ? scoreThem : nextScore
+      scoreThem: isOurOffense ? scoreThem : nextScore,
+      inningScores: nextInningScores
     })
 
     if (lastPitchId && teamId) {
@@ -1202,17 +1251,20 @@ function RecordContent() {
     }
     const cnt = scoreRunners.length
     const nextScore = (isOurOffense ? scoreUs : scoreThem) + cnt
+    const nextInningScores = addRunsToLineScore(inningScores, inningHalf, inning, cnt)
     const nextRunners = { ...runners }
     for (const base of ['1塁', '2塁', '3塁']) {
       if (scoreRunners.includes(nextRunners[base])) nextRunners[base] = null
     }
     if (isOurOffense) setScoreUs(nextScore)
     else setScoreThem(nextScore)
+    setInningScores(nextInningScores)
     setRunners(nextRunners)
     persistGameState({
       runners: nextRunners,
       scoreUs: isOurOffense ? nextScore : scoreUs,
-      scoreThem: isOurOffense ? scoreThem : nextScore
+      scoreThem: isOurOffense ? scoreThem : nextScore,
+      inningScores: nextInningScores
     })
 
     if (lastPitchId && teamId) {
@@ -1385,6 +1437,7 @@ function RecordContent() {
           memoText: action.before.memoText || '',
           hitsUs: action.before.hitsUs || 0,
           hitsThem: action.before.hitsThem || 0,
+          inningScores: normalizeInningScores(action.before.inningScores),
           dhFpPairs: Array.isArray(action.before.dhFpPairs) ? action.before.dhFpPairs : [],
           appearedBenchPlayers: Array.isArray(action.before.appearedBenchPlayers) ? action.before.appearedBenchPlayers : []
         }
@@ -1516,10 +1569,16 @@ function RecordContent() {
 
           <div className="mt-3 bg-black/40 border-2 border-white/70 rounded-lg p-2 !text-white" style={{ color: '#fff' }}>
             <p className="text-[11px] !text-white mb-1 font-semibold" style={{ color: '#fff' }}>スコアボード</p>
-            <table className="w-full text-xs !text-white border border-white/80 border-collapse" style={{ color: '#fff' }}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs !text-white border border-white/80 border-collapse min-w-[420px]" style={{ color: '#fff' }}>
               <thead>
                 <tr className="!text-white" style={{ color: '#fff' }}>
                   <th className="text-left font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>TEAM</th>
+                  {lineScoreColumns.map((col) => (
+                    <th key={`h-${col}`} className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>
+                      {col}
+                    </th>
+                  ))}
                   <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>R</th>
                   <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>H</th>
                 </tr>
@@ -1527,16 +1586,27 @@ function RecordContent() {
               <tbody>
                 <tr>
                   <td className="py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>{topTeamName}</td>
+                  {lineScoreColumns.map((col) => (
+                    <td key={`top-${col}`} className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>
+                      {Number(inningScores.top?.[String(col)] || 0)}
+                    </td>
+                  ))}
                   <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topScore}</td>
                   <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topHits}</td>
                 </tr>
                 <tr>
                   <td className="py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>{bottomTeamName}</td>
+                  {lineScoreColumns.map((col) => (
+                    <td key={`bot-${col}`} className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>
+                      {Number(inningScores.bottom?.[String(col)] || 0)}
+                    </td>
+                  ))}
                   <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomScore}</td>
                   <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomHits}</td>
                 </tr>
               </tbody>
-            </table>
+              </table>
+            </div>
             <p className="text-[10px] !text-white mt-1" style={{ color: '#fff' }}>
               イニング: {inning}回{inningHalf === 'top' ? '表' : '裏'} / {outs}アウト
             </p>

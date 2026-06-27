@@ -9,6 +9,16 @@ import { getClientSession, getUserTeam } from '@/lib/team-client'
 
 const HIT_RESULTS_ONLY = ['ヒット', '2B', '3B', 'HR', '走HR', 'エン2B']
 
+function normalizeInningScores(raw) {
+  const base = { top: {}, bottom: {} }
+  if (!raw || typeof raw !== 'object') return base
+  const top = raw.top && typeof raw.top === 'object' ? raw.top : {}
+  const bottom = raw.bottom && typeof raw.bottom === 'object' ? raw.bottom : {}
+  for (const [k, v] of Object.entries(top)) base.top[String(k)] = Number(v || 0)
+  for (const [k, v] of Object.entries(bottom)) base.bottom[String(k)] = Number(v || 0)
+  return base
+}
+
 function StatsContent() {
   const searchParams = useSearchParams()
   const seasonId = searchParams.get('season')
@@ -30,6 +40,15 @@ function StatsContent() {
   const bottomScore = isUsTop ? (targetGame?.score_them || 0) : (targetGame?.score_us || 0)
   const topHits = isUsTop ? scoreboardHits.us : scoreboardHits.them
   const bottomHits = isUsTop ? scoreboardHits.them : scoreboardHits.us
+  const normalizedInningScores = normalizeInningScores(targetGame?.state_json?.inningScores)
+  const lineScoreColumns = Array.from(
+    new Set([
+      ...Object.keys(normalizedInningScores.top || {}).map((k) => Number(k)),
+      ...Object.keys(normalizedInningScores.bottom || {}).map((k) => Number(k))
+    ])
+  )
+    .filter((n) => Number.isFinite(n) && n > 0)
+    .sort((a, b) => a - b)
 
   useEffect(() => {
     initialize()
@@ -238,10 +257,16 @@ function StatsContent() {
             <p className="text-sm font-semibold text-gray-900">{targetGame.date} vs {targetGame.opponent}</p>
             <div className="mt-2 bg-green-900 border-2 border-white rounded p-2 !text-white" style={{ color: '#fff' }}>
               <p className="text-[11px] !text-white mb-1 font-semibold" style={{ color: '#fff' }}>スコアボード</p>
-              <table className="w-full text-xs !text-white border border-white/80 border-collapse" style={{ color: '#fff' }}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs !text-white border border-white/80 border-collapse min-w-[420px]" style={{ color: '#fff' }}>
                 <thead>
                   <tr className="!text-white" style={{ color: '#fff' }}>
                     <th className="text-left font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>TEAM</th>
+                    {lineScoreColumns.map((col) => (
+                      <th key={`h-${col}`} className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>
+                        {col}
+                      </th>
+                    ))}
                     <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>R</th>
                     <th className="text-right font-semibold py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>H</th>
                   </tr>
@@ -249,16 +274,27 @@ function StatsContent() {
                 <tbody>
                   <tr>
                     <td className="py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>{topTeamName}</td>
+                    {lineScoreColumns.map((col) => (
+                      <td key={`top-${col}`} className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>
+                        {Number(normalizedInningScores.top?.[String(col)] || 0)}
+                      </td>
+                    ))}
                     <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topScore}</td>
                     <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topHits}</td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>{bottomTeamName}</td>
+                    {lineScoreColumns.map((col) => (
+                      <td key={`bot-${col}`} className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>
+                        {Number(normalizedInningScores.bottom?.[String(col)] || 0)}
+                      </td>
+                    ))}
                     <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomScore}</td>
                     <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomHits}</td>
                   </tr>
                 </tbody>
-              </table>
+                </table>
+              </div>
               <p className="text-[10px] !text-white mt-1" style={{ color: '#fff' }}>
                 イニング: {targetGame?.state_json?.inning || '-'}回{targetGame?.state_json?.inningHalf === 'bottom' ? '裏' : '表'}
               </p>
