@@ -379,7 +379,10 @@ function RecordContent() {
   }
 
   const activePlayerIds = new Set(starters.map((s) => s.playerId))
-  const fpPlayerIds = new Set(dhFpPairs.map((p) => p.fpPlayerId))
+  const fpPlayerIds = new Set([
+    ...dhFpPairs.map((p) => p.fpPlayerId),
+    ...lineup.filter((l) => String(l.position || '').startsWith('FP:')).map((l) => l.player_id)
+  ])
   const benchPlayers = lineup.filter((l) => {
     if (activePlayerIds.has(l.player_id)) return false
     if (fpPlayerIds.has(l.player_id)) return false
