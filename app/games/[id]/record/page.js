@@ -704,6 +704,7 @@ function RecordContent() {
       const batterRunnerId = isOurOffense ? batter?.playerId : createOpponentRunnerId()
       setActiveBatterRunnerId(batterRunnerId || '')
       let nextScore = isOurOffense ? scoreUs : scoreThem
+      const isHomeRun = res === 'HR' || res === '走HR'
       if (res === 'ヒット') nextRunners['1塁'] = batterRunnerId
       else if (res === '2B' || res === 'エン2B') nextRunners['2塁'] = batterRunnerId
       else if (res === '3B') nextRunners['3塁'] = batterRunnerId
@@ -723,6 +724,13 @@ function RecordContent() {
         strikes: 0,
         batterIndex: nextIndex
       })
+
+      // Home runs are auto-finalized; no extra advance/score prompt needed.
+      if (isHomeRun) {
+        pushUndoAction(action)
+        confirmAll()
+        return
+      }
     }
     setPanel('error')
     pushUndoAction(action)
