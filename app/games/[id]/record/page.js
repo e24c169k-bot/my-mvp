@@ -238,7 +238,29 @@ function RecordContent() {
     setRunners(state.runners || { '1塁': null, '2塁': null, '3塁': null })
     setBatterIndex(state.batterIndex || 0)
     setOpponentPitcherName(state.opponentPitcherName || '')
-    setDhFpPairs(Array.isArray(state.dhFpPairs) ? state.dhFpPairs : [])
+
+    const stateDhFpPairs = Array.isArray(state.dhFpPairs) ? state.dhFpPairs : []
+    if (stateDhFpPairs.length > 0) {
+      setDhFpPairs(stateDhFpPairs)
+    } else {
+      // Fallback for older games where state_json lost dhFpPairs:
+      // reconstruct from lineup rows (DH starters + FP:* non-starters).
+      const dhStarters = starterList.filter((s) => s.position === 'DH')
+      const fpEntries = normalizedLineup
+        .filter((x) => !x.is_starter && String(x.position || '').startsWith('FP:'))
+        .map((x) => ({
+          fpPlayerId: x.player_id,
+          fpPosition: String(x.position).replace('FP:', '')
+        }))
+      const restoredPairs = dhStarters
+        .map((dh, idx) => ({
+          dhPlayerId: dh.player_id,
+          fpPlayerId: fpEntries[idx]?.fpPlayerId || null,
+          fpPosition: fpEntries[idx]?.fpPosition || ''
+        }))
+        .filter((p) => p.fpPlayerId && p.fpPosition)
+      setDhFpPairs(restoredPairs)
+    }
     setAppearedBenchPlayers(new Set(Array.isArray(state.appearedBenchPlayers) ? state.appearedBenchPlayers : []))
     setLoading(false)
   }
