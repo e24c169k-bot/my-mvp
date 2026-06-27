@@ -64,6 +64,7 @@ function RecordContent() {
   const [advanceReason, setAdvanceReason] = useState('')
   const [advanceRunner, setAdvanceRunner] = useState('')
   const [advanceTo, setAdvanceTo] = useState('')
+  const [outRunner, setOutRunner] = useState('')
   const [scoreRunners, setScoreRunners] = useState([])
 
   const starters = useMemo(
@@ -889,6 +890,49 @@ function RecordContent() {
     pushUndoAction(action)
   }
 
+  async function confirmRunnerOut() {
+    if (!outRunner) return
+    const action = {
+      before: snapshotState(),
+      pitchIds: [],
+      paIds: [],
+      advanceIds: []
+    }
+
+    const nextRunners = { ...runners }
+    for (const base of ['1塁', '2塁', '3塁']) {
+      if (nextRunners[base] === outRunner) nextRunners[base] = null
+    }
+    const newOuts = Math.min(outs + 1, 3)
+
+    setRunners(nextRunners)
+    setOuts(newOuts)
+    persistGameState({ runners: nextRunners, outs: newOuts })
+
+    if (lastPitchId && teamId) {
+      const { data, error } = await supabase
+        .from('runner_advances')
+        .insert({
+          pitch_id: lastPitchId,
+          team_id: teamId,
+          runner_id: outRunner,
+          from_base: null,
+          to_base: 'OUT',
+          reason: 'ランナーアウト'
+        })
+        .select('id')
+        .single()
+      if (error) {
+        setErrorMsg(error.message)
+        return
+      }
+      if (data?.id) action.advanceIds.push(data.id)
+    }
+
+    confirmAll()
+    pushUndoAction(action)
+  }
+
   function confirmAll() {
     setPanel('main')
     setSelectedPitch('')
@@ -898,6 +942,7 @@ function RecordContent() {
     setAdvanceReason('')
     setAdvanceRunner('')
     setAdvanceTo('')
+    setOutRunner('')
     setScoreRunners([])
     setActiveBatterRunnerId('')
   }
@@ -1207,7 +1252,29 @@ function RecordContent() {
               <button onClick={() => startAdvanceFlow('advance')} className="py-3 border-2 border-gray-300 bg-white rounded-lg text-sm font-semibold text-gray-900">進塁あり</button>
               <button onClick={() => startAdvanceFlow('score')} className="py-3 border-2 border-gray-300 bg-white rounded-lg text-sm font-semibold text-gray-900">得点あり</button>
               <button onClick={() => startAdvanceFlow('both')} className="col-span-2 py-3 border-2 border-gray-300 bg-white rounded-lg text-sm font-semibold text-gray-900">進塁＋得点</button>
+              <button onClick={() => setPanel('runner-out')} className="col-span-2 py-3 border-2 border-red-300 bg-red-50 rounded-lg text-sm font-semibold text-red-900">走者アウトあり</button>
             </div>
+          </div>
+        )}
+
+        {panel === 'runner-out' && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
+            <button onClick={() => setPanel('error')} className="text-xs text-green-700 mb-3">← 戻る</button>
+            <h3 className="font-semibold text-sm mb-3">走者アウト</h3>
+            <label className="block text-xs text-gray-700 mb-1">アウトになった走者</label>
+            <select
+              value={outRunner}
+              onChange={(e) => setOutRunner(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 text-gray-900"
+            >
+              <option value="">選択してください</option>
+              {runnerPlayers.map(({ base, player, pid }) => (
+                <option key={base} value={pid}>{base}: {player?.name}</option>
+              ))}
+            </select>
+            <button onClick={confirmRunnerOut} disabled={!outRunner} className="w-full py-3 bg-red-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
+              アウトを確定
+            </button>
           </div>
         )}
 
