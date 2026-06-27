@@ -48,7 +48,7 @@ function StatsContent() {
     // 対象試合IDを取得（game指定がある場合はその試合のみ）
     let gamesQuery = supabase
       .from('games')
-      .select('id, opponent, date, status, score_us, score_them')
+      .select('id, opponent, date, status, score_us, score_them, state_json')
       .eq('team_id', currentTeamId)
       .eq('status', 'finished')
 
@@ -201,6 +201,12 @@ function StatsContent() {
             <p className="text-xs text-gray-500">対象試合</p>
             <p className="text-sm font-semibold text-gray-900">{targetGame.date} vs {targetGame.opponent}</p>
             <p className="text-lg font-bold text-green-900 mt-1">{targetGame.score_us} - {targetGame.score_them}</p>
+            {targetGame?.state_json?.memoText && (
+              <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded p-2">
+                <p className="text-[11px] text-yellow-700 font-semibold mb-1">メモ</p>
+                <p className="text-xs text-gray-700 whitespace-pre-wrap">{targetGame.state_json.memoText}</p>
+              </div>
+            )}
           </div>
         )}
 

@@ -116,6 +116,12 @@ function GamesContent() {
                     </Link>
                   </div>
                 </div>
+                {game?.state_json?.memoText && (
+                  <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded-lg p-2">
+                    <p className="text-[11px] text-yellow-700 font-semibold mb-1">メモ</p>
+                    <p className="text-xs text-gray-700 whitespace-pre-wrap">{game.state_json.memoText}</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
