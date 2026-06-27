@@ -11,6 +11,7 @@ const PITCH_RESULTS = ['見逃しS', '空振りS', 'ボール', 'ファウル', 
 const POSITIONS = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF']
 const HIT_RESULTS = ['バント', 'ゴロアウト', 'フライアウト', 'ライナーアウト', 'ヒット', '2B', '3B', 'HR', '走HR', 'エン2B']
 const OUT_RESULTS = ['ゴロアウト', 'フライアウト', 'ライナーアウト', 'バント']
+const HIT_RESULTS_ONLY = ['ヒット', '2B', '3B', 'HR', '走HR', 'エン2B']
 const ADVANCE_REASONS = ['盗塁', 'タッチアップ', 'パスボール', '暴投', 'エラー・野選', 'その他']
 const BASES = ['1塁', '2塁', '3塁', '本塁']
 const BASE_ORDER = ['1塁', '2塁', '3塁', '本塁']
@@ -40,6 +41,8 @@ function RecordContent() {
   const [pitcherId, setPitcherId] = useState(null)
   const [scoreUs, setScoreUs] = useState(0)
   const [scoreThem, setScoreThem] = useState(0)
+  const [hitsUs, setHitsUs] = useState(0)
+  const [hitsThem, setHitsThem] = useState(0)
   const [lastPitchId, setLastPitchId] = useState(null)
   const [undoStack, setUndoStack] = useState([])
   const [opponentRunnerSeq, setOpponentRunnerSeq] = useState(1)
@@ -108,6 +111,8 @@ function RecordContent() {
   const bottomTeamName = isUsTop ? (game?.opponent || '相手') : '自チーム'
   const topScore = isUsTop ? scoreUs : scoreThem
   const bottomScore = isUsTop ? scoreThem : scoreUs
+  const topHits = isUsTop ? hitsUs : hitsThem
+  const bottomHits = isUsTop ? hitsThem : hitsUs
 
   useEffect(() => {
     initialize()
@@ -245,6 +250,8 @@ function RecordContent() {
     setBatterIndex(state.batterIndex || 0)
     setOpponentPitcherName(state.opponentPitcherName || '')
     setMemoText(state.memoText || '')
+    setHitsUs(state.hitsUs || 0)
+    setHitsThem(state.hitsThem || 0)
 
     const stateDhFpPairs = Array.isArray(state.dhFpPairs) ? state.dhFpPairs : []
     if (stateDhFpPairs.length > 0) {
@@ -285,6 +292,8 @@ function RecordContent() {
       batterIndex: next.batterIndex ?? batterIndex,
       opponentPitcherName: next.opponentPitcherName ?? opponentPitcherName,
       memoText: next.memoText ?? memoText,
+      hitsUs: next.hitsUs ?? hitsUs,
+      hitsThem: next.hitsThem ?? hitsThem,
       dhFpPairs: next.dhFpPairs ?? dhFpPairs,
       appearedBenchPlayers: next.appearedBenchPlayers ?? Array.from(appearedBenchPlayers)
     }
@@ -312,6 +321,8 @@ function RecordContent() {
       batterIndex,
       opponentPitcherName,
       memoText,
+      hitsUs,
+      hitsThem,
       dhFpPairs: [...dhFpPairs],
       appearedBenchPlayers: Array.from(appearedBenchPlayers),
       scoreUs,
@@ -332,6 +343,8 @@ function RecordContent() {
     setBatterIndex(snapshot.batterIndex)
     setOpponentPitcherName(snapshot.opponentPitcherName || '')
     setMemoText(snapshot.memoText || '')
+    setHitsUs(snapshot.hitsUs || 0)
+    setHitsThem(snapshot.hitsThem || 0)
     setDhFpPairs(Array.isArray(snapshot.dhFpPairs) ? snapshot.dhFpPairs : [])
     setAppearedBenchPlayers(new Set(Array.isArray(snapshot.appearedBenchPlayers) ? snapshot.appearedBenchPlayers : []))
     setScoreUs(snapshot.scoreUs)
@@ -1033,7 +1046,14 @@ function RecordContent() {
       const batterRunnerId = isOurOffense ? batter?.playerId : createOpponentRunnerId()
       setActiveBatterRunnerId(batterRunnerId || '')
       let nextScore = isOurOffense ? scoreUs : scoreThem
+      let nextHitsUs = hitsUs
+      let nextHitsThem = hitsThem
       const isHomeRun = res === 'HR' || res === '走HR'
+      const isHitResult = HIT_RESULTS_ONLY.includes(res)
+      if (isHitResult) {
+        if (isOurOffense) nextHitsUs += 1
+        else nextHitsThem += 1
+      }
       let scoredRunnerIds = []
       if (res === 'ヒット') {
         const placed = placeBatterWithCarry(runners, batterRunnerId, '1塁')
@@ -1058,12 +1078,16 @@ function RecordContent() {
       }
       const nextIndex = nextBatter()
       setRunners(nextRunners)
+      setHitsUs(nextHitsUs)
+      setHitsThem(nextHitsThem)
       if (isOurOffense) setScoreUs(nextScore)
       else setScoreThem(nextScore)
       persistGameState({
         runners: nextRunners,
         scoreUs: isOurOffense ? nextScore : scoreUs,
         scoreThem: isOurOffense ? scoreThem : nextScore,
+        hitsUs: nextHitsUs,
+        hitsThem: nextHitsThem,
         balls: 0,
         strikes: 0,
         batterIndex: nextIndex
@@ -1359,6 +1383,8 @@ function RecordContent() {
           batterIndex: action.before.batterIndex,
           opponentPitcherName: action.before.opponentPitcherName || '',
           memoText: action.before.memoText || '',
+          hitsUs: action.before.hitsUs || 0,
+          hitsThem: action.before.hitsThem || 0,
           dhFpPairs: Array.isArray(action.before.dhFpPairs) ? action.before.dhFpPairs : [],
           appearedBenchPlayers: Array.isArray(action.before.appearedBenchPlayers) ? action.before.appearedBenchPlayers : []
         }
@@ -1495,16 +1521,19 @@ function RecordContent() {
                 <tr className="text-white/80">
                   <th className="text-left font-semibold py-1">TEAM</th>
                   <th className="text-right font-semibold py-1">R</th>
+                  <th className="text-right font-semibold py-1">H</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td className="py-1">{topTeamName}</td>
                   <td className="py-1 text-right font-bold">{topScore}</td>
+                  <td className="py-1 text-right font-bold">{topHits}</td>
                 </tr>
                 <tr>
                   <td className="py-1">{bottomTeamName}</td>
                   <td className="py-1 text-right font-bold">{bottomScore}</td>
+                  <td className="py-1 text-right font-bold">{bottomHits}</td>
                 </tr>
               </tbody>
             </table>

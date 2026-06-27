@@ -7,6 +7,8 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { getClientSession, getUserTeam } from '@/lib/team-client'
 
+const HIT_RESULTS_ONLY = ['ヒット', '2B', '3B', 'HR', '走HR', 'エン2B']
+
 function StatsContent() {
   const searchParams = useSearchParams()
   const seasonId = searchParams.get('season')
@@ -18,6 +20,7 @@ function StatsContent() {
   const [battingStats, setBattingStats] = useState([])
   const [pitchingStats, setPitchingStats] = useState([])
   const [targetGame, setTargetGame] = useState(null)
+  const [scoreboardHits, setScoreboardHits] = useState({ us: 0, them: 0 })
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
   const isUsTop = (targetGame?.state_json?.usBattingTurn || 'first') === 'first'
@@ -25,6 +28,8 @@ function StatsContent() {
   const bottomTeamName = isUsTop ? (targetGame?.opponent || '相手') : '自チーム'
   const topScore = isUsTop ? (targetGame?.score_us || 0) : (targetGame?.score_them || 0)
   const bottomScore = isUsTop ? (targetGame?.score_them || 0) : (targetGame?.score_us || 0)
+  const topHits = isUsTop ? scoreboardHits.us : scoreboardHits.them
+  const bottomHits = isUsTop ? scoreboardHits.them : scoreboardHits.us
 
   useEffect(() => {
     initialize()
@@ -74,11 +79,37 @@ function StatsContent() {
       setTargetGame(null)
       setBattingStats([])
       setPitchingStats([])
+      setScoreboardHits({ us: 0, them: 0 })
       setLoading(false)
       return
     }
 
     setTargetGame(gameIdParam ? games[0] : null)
+    if (gameIdParam) {
+      const target = games[0]
+      const stateHitsUs = Number(target?.state_json?.hitsUs || 0)
+      const stateHitsThem = Number(target?.state_json?.hitsThem || 0)
+      if (stateHitsUs > 0 || stateHitsThem > 0) {
+        setScoreboardHits({ us: stateHitsUs, them: stateHitsThem })
+      } else {
+        const { count: usHitsCount } = await supabase
+          .from('plate_appearances')
+          .select('*', { count: 'exact', head: true })
+          .eq('game_id', target.id)
+          .eq('team_id', currentTeamId)
+          .in('result', HIT_RESULTS_ONLY)
+        const { count: themHitsCount } = await supabase
+          .from('pitches')
+          .select('*', { count: 'exact', head: true })
+          .eq('game_id', target.id)
+          .eq('team_id', currentTeamId)
+          .is('batter_id', null)
+          .in('result', HIT_RESULTS_ONLY)
+        setScoreboardHits({ us: usHitsCount || 0, them: themHitsCount || 0 })
+      }
+    } else {
+      setScoreboardHits({ us: 0, them: 0 })
+    }
     const gameIds = games.map(g => g.id)
 
     // 成績を取得（選手情報込み）
@@ -212,16 +243,19 @@ function StatsContent() {
                   <tr className="text-gray-600">
                     <th className="text-left font-semibold py-1">TEAM</th>
                     <th className="text-right font-semibold py-1">R</th>
+                    <th className="text-right font-semibold py-1">H</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
                     <td className="py-1 text-gray-900">{topTeamName}</td>
                     <td className="py-1 text-right font-bold text-gray-900">{topScore}</td>
+                    <td className="py-1 text-right font-bold text-gray-900">{topHits}</td>
                   </tr>
                   <tr>
                     <td className="py-1 text-gray-900">{bottomTeamName}</td>
                     <td className="py-1 text-right font-bold text-gray-900">{bottomScore}</td>
+                    <td className="py-1 text-right font-bold text-gray-900">{bottomHits}</td>
                   </tr>
                 </tbody>
               </table>
