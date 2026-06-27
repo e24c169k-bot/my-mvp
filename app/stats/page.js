@@ -31,6 +31,17 @@ function getInningScoreTotal(raw) {
   return topTotal + bottomTotal
 }
 
+function getLineScoreCellValue(scores, half, inningNumber, currentInning, currentHalf) {
+  const inningKey = String(inningNumber)
+  const existing = scores?.[half]?.[inningKey]
+  if (existing !== undefined && existing !== null) return String(existing)
+
+  if (inningNumber > currentInning) return ''
+  if (inningNumber < currentInning) return '0'
+  if (half === 'top') return '0'
+  return currentHalf === 'bottom' ? '0' : ''
+}
+
 function StatsContent() {
   const searchParams = useSearchParams()
   const seasonId = searchParams.get('season')
@@ -57,6 +68,8 @@ function StatsContent() {
   const bottomErrors = isUsTop ? scoreboardErrors.them : scoreboardErrors.us
   const normalizedInningScores = normalizeInningScores(targetGame?.state_json?.inningScores)
   const needLineScoreFallback = targetGame && getInningScoreTotal(normalizedInningScores) === 0 && ((targetGame?.score_us || 0) + (targetGame?.score_them || 0) > 0)
+  const currentInning = Number(targetGame?.state_json?.inning || 1)
+  const currentHalf = targetGame?.state_json?.inningHalf === 'bottom' ? 'bottom' : 'top'
   const lineScoreColumnsRaw = Array.from(
     new Set([
       ...Object.keys(normalizedInningScores.top || {}).map((k) => Number(k)),
@@ -300,7 +313,7 @@ function StatsContent() {
                     <td className="py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>{topTeamName}</td>
                     {lineScoreColumns.map((col) => (
                       <td key={`top-${col}`} className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>
-                        {Number(normalizedInningScores.top?.[String(col)] || 0)}
+                        {getLineScoreCellValue(normalizedInningScores, 'top', col, currentInning, currentHalf)}
                       </td>
                     ))}
                     <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topScore}</td>
@@ -311,7 +324,7 @@ function StatsContent() {
                     <td className="py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>{bottomTeamName}</td>
                     {lineScoreColumns.map((col) => (
                       <td key={`bot-${col}`} className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>
-                        {Number(normalizedInningScores.bottom?.[String(col)] || 0)}
+                        {getLineScoreCellValue(normalizedInningScores, 'bottom', col, currentInning, currentHalf)}
                       </td>
                     ))}
                     <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomScore}</td>

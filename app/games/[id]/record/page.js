@@ -43,6 +43,19 @@ function getInningScoreTotal(raw) {
   return topTotal + bottomTotal
 }
 
+function getLineScoreCellValue(scores, half, inningNumber, currentInning, currentHalf) {
+  const inningKey = String(inningNumber)
+  const existing = scores?.[half]?.[inningKey]
+  if (existing !== undefined && existing !== null) return String(existing)
+
+  if (inningNumber > currentInning) return ''
+  if (inningNumber < currentInning) return '0'
+
+  // Current inning: top is reached when top starts, bottom only after side changes.
+  if (half === 'top') return '0'
+  return currentHalf === 'bottom' ? '0' : ''
+}
+
 function RecordContent() {
   const { id: gameId } = useParams()
   const searchParams = useSearchParams()
@@ -1674,7 +1687,7 @@ function RecordContent() {
                   <td className="py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>{topTeamName}</td>
                   {lineScoreColumns.map((col) => (
                     <td key={`top-${col}`} className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>
-                      {Number(inningScores.top?.[String(col)] || 0)}
+                      {getLineScoreCellValue(inningScores, 'top', col, Number(inning || 1), inningHalf)}
                     </td>
                   ))}
                   <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{topScore}</td>
@@ -1685,7 +1698,7 @@ function RecordContent() {
                   <td className="py-1 px-2 !text-white border border-white/80" style={{ color: '#fff' }}>{bottomTeamName}</td>
                   {lineScoreColumns.map((col) => (
                     <td key={`bot-${col}`} className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>
-                      {Number(inningScores.bottom?.[String(col)] || 0)}
+                      {getLineScoreCellValue(inningScores, 'bottom', col, Number(inning || 1), inningHalf)}
                     </td>
                   ))}
                   <td className="py-1 px-2 text-right font-bold !text-white border border-white/80" style={{ color: '#fff' }}>{bottomScore}</td>
