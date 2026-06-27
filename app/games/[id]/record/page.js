@@ -486,6 +486,58 @@ function RecordContent() {
     setDefenseSubPosition('')
   }
 
+  function executeDefensePositionSwap(otherPlayerId) {
+    if (defenseSubTarget === null || !otherPlayerId || otherPlayerId === defenseSubTarget) return
+
+    const targetPlayerId = defenseSubTarget
+    const targetPos = defenseSubPosition || POSITIONS.find((pos) => getDefenderIdByPosition(pos) === targetPlayerId) || ''
+    const otherPos = POSITIONS.find((pos) => getDefenderIdByPosition(pos) === otherPlayerId) || ''
+    if (!targetPos || !otherPos || targetPos === otherPos) return
+
+    setActiveBatters((prev) =>
+      prev.map((b) => {
+        if (b.playerId === targetPlayerId) return { ...b, position: otherPos }
+        if (b.playerId === otherPlayerId) return { ...b, position: targetPos }
+        return b
+      })
+    )
+
+    let fpChanged = false
+    const nextDhFpPairs = dhFpPairs.map((pair) => {
+      if (pair.fpPlayerId === targetPlayerId) {
+        fpChanged = true
+        return { ...pair, fpPosition: otherPos }
+      }
+      if (pair.fpPlayerId === otherPlayerId) {
+        fpChanged = true
+        return { ...pair, fpPosition: targetPos }
+      }
+      return pair
+    })
+    if (fpChanged) {
+      setDhFpPairs(nextDhFpPairs)
+      setLineup((prev) =>
+        prev.map((entry) => {
+          if (entry.player_id === targetPlayerId && String(entry.position || '').startsWith('FP:')) {
+            return { ...entry, position: `FP:${otherPos}` }
+          }
+          if (entry.player_id === otherPlayerId && String(entry.position || '').startsWith('FP:')) {
+            return { ...entry, position: `FP:${targetPos}` }
+          }
+          return entry
+        })
+      )
+      persistGameState({ dhFpPairs: nextDhFpPairs })
+    }
+
+    if (targetPos === 'P') setPitcherId(otherPlayerId)
+    else if (otherPos === 'P') setPitcherId(targetPlayerId)
+
+    setPanel('main')
+    setDefenseSubTarget(null)
+    setDefenseSubPosition('')
+  }
+
   function executeRunnerSub(newPlayerId) {
     if (!runnerSubTargetBase || !runnerSubTargetPlayerId) return
     const outgoingPlayerId = runnerSubTargetPlayerId
@@ -1473,6 +1525,25 @@ function RecordContent() {
                   <option value="">選択してください</option>
                   {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
+                <p className="text-xs text-gray-600 mb-1">出場中選手とポジション入替</p>
+                <div className="flex flex-col gap-2 mb-3">
+                  {Array.from(new Set(POSITIONS.map((pos) => getDefenderIdByPosition(pos)).filter(Boolean)))
+                    .filter((pid) => pid !== defenseSubTarget)
+                    .map((pid) => {
+                      const currentPos = POSITIONS.find((pos) => getDefenderIdByPosition(pos) === pid) || '-'
+                      const p = lineup.find((l) => l.player_id === pid)
+                      return (
+                        <button
+                          key={`swap-${pid}`}
+                          onClick={() => executeDefensePositionSwap(pid)}
+                          className="flex items-center justify-between px-4 py-3 bg-white border-2 border-indigo-300 rounded-lg text-sm"
+                        >
+                          <span>{currentPos}: #{p?.players?.number} {p?.players?.name}</span>
+                          <span className="text-xs text-indigo-700">入替</span>
+                        </button>
+                      )
+                    })}
+                </div>
                 {benchPlayers.length === 0 ? (
                   <p className="text-sm text-gray-500 py-4 text-center">交代できる選手がいません</p>
                 ) : (
