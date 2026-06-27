@@ -87,9 +87,10 @@ function RecordContent() {
 
   const batter = starters[batterIndex % (starters.length || 1)]
   const batterPlayer = lineup.find((l) => l.player_id === batter?.playerId)
+  const getDhFpFielderId = (pair) => pair?.currentFielderId || pair?.fpPlayerId || null
   const getDefenderIdByPosition = (position) => {
     const fp = dhFpPairs.find((p) => p.fpPosition === position)
-    if (fp?.fpPlayerId) return fp.fpPlayerId
+    if (fp) return getDhFpFielderId(fp)
     const fpLineupEntry = lineup.find((l) => l.position === `FP:${position}`)
     if (fpLineupEntry?.player_id) return fpLineupEntry.player_id
     return starters.find((s) => s.position === position)?.playerId || null
@@ -407,10 +408,92 @@ function RecordContent() {
     })
   }
 
+  function executeDhFpOffenseToggle(slotIndex) {
+    if (slotIndex === null || slotIndex === undefined) return
+    const outgoing = starters[slotIndex]
+    if (!outgoing) return
+    const pair = dhFpPairs.find((p) => p.dhPlayerId === outgoing.playerId || p.fpPlayerId === outgoing.playerId)
+    if (!pair) return
+
+    if (outgoing.playerId === pair.dhPlayerId) {
+      const fpLineup = lineup.find((l) => l.player_id === pair.fpPlayerId)
+      if (!fpLineup) return
+      setActiveBatters((prev) =>
+        prev.map((b, i) =>
+          i === slotIndex
+            ? { ...b, playerId: pair.fpPlayerId, position: 'DH', isStarter: false }
+            : b
+        )
+      )
+      setBenchedStarters((prev) => new Set([...prev, pair.dhPlayerId]))
+      markBenchPlayerAppeared(pair.fpPlayerId)
+      setPanel('main')
+      setSubTarget(null)
+      return
+    }
+
+    if (outgoing.playerId === pair.fpPlayerId) {
+      if (reentryUsed.has(pair.dhPlayerId)) {
+        setErrorMsg('このDHは再出場済みのため復活できません。')
+        return
+      }
+      setActiveBatters((prev) =>
+        prev.map((b, i) =>
+          i === slotIndex
+            ? { ...b, playerId: pair.dhPlayerId, position: 'DH', isStarter: true }
+            : b
+        )
+      )
+      setReentryUsed((prev) => new Set([...prev, pair.dhPlayerId]))
+      setPanel('main')
+      setSubTarget(null)
+    }
+  }
+
+  function executeDhFpDefenseToggle(position, toDh) {
+    const pair = dhFpPairs.find((p) => p.fpPosition === position)
+    if (!pair) return
+    const currentFielderId = getDhFpFielderId(pair)
+    let nextPairs = dhFpPairs
+
+    if (toDh) {
+      if (currentFielderId === pair.dhPlayerId) return
+      nextPairs = dhFpPairs.map((p) =>
+        p.dhPlayerId === pair.dhPlayerId
+          ? { ...p, currentFielderId: p.dhPlayerId }
+          : p
+      )
+      if (position === 'P') setPitcherId(pair.dhPlayerId)
+    } else {
+      if (currentFielderId === pair.fpPlayerId && !pair.currentFielderId) return
+      nextPairs = dhFpPairs.map((p) =>
+        p.dhPlayerId === pair.dhPlayerId
+          ? { ...p, currentFielderId: null }
+          : p
+      )
+      if (position === 'P') setPitcherId(pair.fpPlayerId)
+    }
+
+    setDhFpPairs(nextPairs)
+    persistGameState({ dhFpPairs: nextPairs })
+    setPanel('main')
+    setDefenseSubTarget(null)
+    setDefenseSubPosition('')
+  }
+
   function executeSubstitution(newPlayerId) {
     if (subTarget === null) return
     const outgoing = starters[subTarget]
     const incomingLineup = lineup.find((l) => l.player_id === newPlayerId)
+    const outgoingPair = dhFpPairs.find((p) => p.dhPlayerId === outgoing?.playerId || p.fpPlayerId === outgoing?.playerId)
+    if (outgoingPair && outgoing?.position === 'DH' && outgoing?.playerId === outgoingPair.fpPlayerId && newPlayerId !== outgoingPair.dhPlayerId) {
+      setErrorMsg('DP/FP復活は同じDH選手のみ可能です。')
+      return
+    }
+    const isDhFpOffenseSwap = outgoingPair && (
+      (outgoing?.playerId === outgoingPair.dhPlayerId && newPlayerId === outgoingPair.fpPlayerId) ||
+      (outgoing?.playerId === outgoingPair.fpPlayerId && newPlayerId === outgoingPair.dhPlayerId)
+    )
 
     setActiveBatters((prev) =>
       prev.map((b, i) =>
@@ -418,7 +501,7 @@ function RecordContent() {
           ? {
               ...b,
               playerId: newPlayerId,
-              position: incomingLineup?.position || b.position,
+              position: isDhFpOffenseSwap ? 'DH' : (incomingLineup?.position || b.position),
               isStarter: incomingLineup?.is_starter || false
             }
           : b
@@ -1495,6 +1578,33 @@ function RecordContent() {
               </div>
             ) : (
               <>
+                {(() => {
+                  const target = starters[subTarget]
+                  if (!target) return null
+                  const pair = dhFpPairs.find((p) => p.dhPlayerId === target.playerId || p.fpPlayerId === target.playerId)
+                  if (!pair) return null
+                  if (target.playerId === pair.dhPlayerId) {
+                    return (
+                      <button
+                        onClick={() => executeDhFpOffenseToggle(subTarget)}
+                        className="w-full mb-2 py-2 border-2 border-indigo-400 bg-indigo-50 text-indigo-900 rounded-lg text-sm font-semibold"
+                      >
+                        同じFPをDH打順に入れる（DH解除）
+                      </button>
+                    )
+                  }
+                  if (target.playerId === pair.fpPlayerId) {
+                    return (
+                      <button
+                        onClick={() => executeDhFpOffenseToggle(subTarget)}
+                        className="w-full mb-2 py-2 border-2 border-indigo-400 bg-indigo-50 text-indigo-900 rounded-lg text-sm font-semibold"
+                      >
+                        同じDHを再出場（DP/FP復活）
+                      </button>
+                    )
+                  }
+                  return null
+                })()}
                 {benchPlayers.length === 0 ? <p className="text-sm text-gray-500 py-4 text-center">交代できる選手がいません</p> : <div className="flex flex-col gap-2">{benchPlayers.map((p) => <button key={p.player_id} onClick={() => executeSubstitution(p.player_id)} className="flex items-center justify-between px-4 py-3 bg-white border-2 border-green-300 rounded-lg text-sm"><span><strong>#{p.players?.number}</strong> {p.players?.name}</span><span className="text-xs text-gray-500">{benchedStarters.has(p.player_id) ? '再出場' : '控え'}</span></button>)}</div>}
                 <button onClick={() => setSubTarget(null)} className="mt-3 text-xs text-gray-500 underline">← 選び直す</button>
               </>
@@ -1513,7 +1623,7 @@ function RecordContent() {
                   {POSITIONS.map((pos) => {
                     const defenderId = getDefenderIdByPosition(pos)
                     const p = lineup.find((l) => l.player_id === defenderId)
-                    const isFp = dhFpPairs.some((pair) => pair.fpPlayerId === defenderId && pair.fpPosition === pos)
+                    const isFp = dhFpPairs.some((pair) => getDhFpFielderId(pair) === defenderId && pair.fpPosition === pos)
                     return (
                       <button
                         key={`${pos}-${defenderId}`}
@@ -1544,6 +1654,32 @@ function RecordContent() {
                   <option value="">選択してください</option>
                   {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
+                {(() => {
+                  const pair = dhFpPairs.find((p) => p.fpPosition === defenseSubPosition)
+                  if (!pair) return null
+                  const currentFielderId = getDhFpFielderId(pair)
+                  if (currentFielderId === pair.fpPlayerId) {
+                    return (
+                      <button
+                        onClick={() => executeDhFpDefenseToggle(defenseSubPosition, true)}
+                        className="w-full mb-3 py-2 border-2 border-indigo-400 bg-indigo-50 text-indigo-900 rounded-lg text-sm font-semibold"
+                      >
+                        DHが{defenseSubPosition}守備に入る（DH解除）
+                      </button>
+                    )
+                  }
+                  if (currentFielderId === pair.dhPlayerId) {
+                    return (
+                      <button
+                        onClick={() => executeDhFpDefenseToggle(defenseSubPosition, false)}
+                        className="w-full mb-3 py-2 border-2 border-indigo-400 bg-indigo-50 text-indigo-900 rounded-lg text-sm font-semibold"
+                      >
+                        同じFPを再出場（DP/FP復活）
+                      </button>
+                    )
+                  }
+                  return null
+                })()}
                 <p className="text-xs text-gray-600 mb-1">出場中選手とポジション入替</p>
                 <div className="flex flex-col gap-2 mb-3">
                   {Array.from(new Set(POSITIONS.map((pos) => getDefenderIdByPosition(pos)).filter(Boolean)))
