@@ -11,17 +11,19 @@ function StatsContent() {
   const searchParams = useSearchParams()
   const seasonId = searchParams.get('season')
   const teamIdParam = searchParams.get('team')
+  const gameIdParam = searchParams.get('game')
   const router = useRouter()
   const [tab, setTab] = useState('batting')
   const [teamId, setTeamId] = useState(teamIdParam || null)
   const [battingStats, setBattingStats] = useState([])
   const [pitchingStats, setPitchingStats] = useState([])
+  const [targetGame, setTargetGame] = useState(null)
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
     initialize()
-  }, [seasonId, teamIdParam])
+  }, [seasonId, teamIdParam, gameIdParam])
 
   async function initialize() {
     const { user } = await getClientSession()
@@ -35,18 +37,28 @@ function StatsContent() {
       return
     }
     setTeamId(team.team_id)
-    if (seasonId) fetchStats(team.team_id)
+    if (seasonId || gameIdParam) fetchStats(team.team_id)
+    else setLoading(false)
   }
 
   async function fetchStats(currentTeamId) {
     setErrorMsg('')
-    // シーズン内の試合IDを取得
-    const { data: games, error: gamesError } = await supabase
+    setLoading(true)
+
+    // 対象試合IDを取得（game指定がある場合はその試合のみ）
+    let gamesQuery = supabase
       .from('games')
-      .select('id')
-      .eq('season_id', seasonId)
+      .select('id, opponent, date, status')
       .eq('team_id', currentTeamId)
       .eq('status', 'finished')
+
+    if (gameIdParam) {
+      gamesQuery = gamesQuery.eq('id', gameIdParam)
+    } else {
+      gamesQuery = gamesQuery.eq('season_id', seasonId)
+    }
+
+    const { data: games, error: gamesError } = await gamesQuery
     if (gamesError) {
       setErrorMsg(gamesError.message)
       setLoading(false)
@@ -54,9 +66,14 @@ function StatsContent() {
     }
 
     if (!games || games.length === 0) {
+      setTargetGame(null)
+      setBattingStats([])
+      setPitchingStats([])
       setLoading(false)
       return
     }
+
+    setTargetGame(gameIdParam ? games[0] : null)
     const gameIds = games.map(g => g.id)
 
     // 成績を取得（選手情報込み）
@@ -158,7 +175,8 @@ function StatsContent() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `成績_${tab === 'batting' ? '打撃' : '投手'}.csv`
+    const scope = targetGame ? `${targetGame.date}_${targetGame.opponent}` : 'シーズン'
+    a.download = `成績_${scope}_${tab === 'batting' ? '打撃' : '投手'}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -168,12 +186,20 @@ function StatsContent() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-white">
       <header className="bg-gradient-to-r from-green-900 to-green-700 text-white px-4 py-3 flex items-center justify-between">
-        <h1 className="text-base font-semibold">📊 成績一覧</h1>
-        <Link href={`/?season=${seasonId}&team=${teamId}`} className="text-xs text-green-200">← ホーム</Link>
+        <h1 className="text-base font-semibold">{targetGame ? '📊 試合成績' : '📊 成績一覧'}</h1>
+        <Link href={targetGame ? `/games?season=${seasonId}&team=${teamId}` : `/?season=${seasonId}&team=${teamId}`} className="text-xs text-green-200">
+          {targetGame ? '← 試合一覧' : '← ホーム'}
+        </Link>
       </header>
 
       <div className="p-4">
         {errorMsg && <p className="text-sm text-red-600 mb-3">{errorMsg}</p>}
+        {targetGame && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+            <p className="text-xs text-gray-500">対象試合</p>
+            <p className="text-sm font-semibold text-gray-900">{targetGame.date} vs {targetGame.opponent}</p>
+          </div>
+        )}
 
         {/* タブ */}
         <div className="flex gap-2 mb-4">
