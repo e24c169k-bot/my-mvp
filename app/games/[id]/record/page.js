@@ -1441,20 +1441,21 @@ function RecordContent() {
                 <div className="flex flex-col gap-2">
                   {POSITIONS.map((pos) => {
                     const defenderId = getDefenderIdByPosition(pos)
-                    if (!defenderId) return null
                     const p = lineup.find((l) => l.player_id === defenderId)
                     const isFp = dhFpPairs.some((pair) => pair.fpPlayerId === defenderId && pair.fpPosition === pos)
                     return (
                       <button
                         key={`${pos}-${defenderId}`}
                         onClick={() => {
+                          if (!defenderId) return
                           setDefenseSubTarget(defenderId)
                           setDefenseSubPosition(pos)
                         }}
-                        className="flex items-center justify-between px-4 py-3 bg-white border-2 border-gray-200 rounded-lg text-sm"
+                        disabled={!defenderId}
+                        className="flex items-center justify-between px-4 py-3 bg-white border-2 border-gray-200 rounded-lg text-sm disabled:opacity-50"
                       >
-                        <span>{pos}: {p?.players?.name}</span>
-                        <span className="text-xs text-gray-400">{isFp ? 'FP' : '守備'}</span>
+                        <span>{pos}: {p?.players?.name || '未設定'}</span>
+                        <span className="text-xs text-gray-400">{defenderId ? (isFp ? 'FP' : '守備') : '未設定'}</span>
                       </button>
                     )
                   })}
