@@ -379,10 +379,12 @@ function RecordContent() {
   }
 
   const activePlayerIds = new Set(starters.map((s) => s.playerId))
-  const fpPlayerIds = new Set([
-    ...dhFpPairs.map((p) => p.fpPlayerId),
-    ...lineup.filter((l) => String(l.position || '').startsWith('FP:')).map((l) => l.player_id)
-  ])
+  const fpPlayerIds = new Set(dhFpPairs.map((p) => p.fpPlayerId))
+  if (fpPlayerIds.size === 0) {
+    for (const l of lineup) {
+      if (String(l.position || '').startsWith('FP:')) fpPlayerIds.add(l.player_id)
+    }
+  }
   const benchPlayers = lineup.filter((l) => {
     if (activePlayerIds.has(l.player_id)) return false
     if (fpPlayerIds.has(l.player_id)) return false
@@ -426,27 +428,58 @@ function RecordContent() {
 
   function executeDefenseSubstitution(newPlayerId, toPosition) {
     if (defenseSubTarget === null) return
-    const outgoing = starters[defenseSubTarget]
+    const outgoing = starters.find((s) => s.playerId === defenseSubTarget) || null
+    const outgoingLineup = lineup.find((l) => l.player_id === defenseSubTarget)
+    const outgoingFpPair = dhFpPairs.find((p) => p.fpPlayerId === defenseSubTarget)
+    const outgoingIsFp = !!outgoingFpPair || String(outgoingLineup?.position || '').startsWith('FP:')
     const incomingLineup = lineup.find((l) => l.player_id === newPlayerId)
-    const finalPosition = toPosition || outgoing?.position || incomingLineup?.position || ''
+    const fallbackFpPosition = String(outgoingLineup?.position || '').startsWith('FP:')
+      ? String(outgoingLineup.position).replace('FP:', '')
+      : ''
+    const finalPosition = toPosition || outgoing?.position || outgoingFpPair?.fpPosition || fallbackFpPosition || incomingLineup?.position || ''
 
-    setActiveBatters((prev) =>
-      prev.map((b, i) =>
-        i === defenseSubTarget
-          ? {
-              ...b,
-              playerId: newPlayerId,
-              position: finalPosition || b.position,
-              isStarter: incomingLineup?.is_starter || false
-            }
-          : b
+    if (outgoing) {
+      setActiveBatters((prev) =>
+        prev.map((b) =>
+          b.playerId === defenseSubTarget
+            ? {
+                ...b,
+                playerId: newPlayerId,
+                position: finalPosition || b.position,
+                isStarter: incomingLineup?.is_starter || false
+              }
+            : b
+        )
       )
-    )
+    }
 
     if (outgoing?.isStarter) setBenchedStarters((prev) => new Set([...prev, outgoing.playerId]))
     if (benchedStarters.has(newPlayerId)) setReentryUsed((prev) => new Set([...prev, newPlayerId]))
+
+    let nextDhFpPairs = dhFpPairs
+    if (outgoingIsFp) {
+      nextDhFpPairs = dhFpPairs.map((pair) =>
+        pair.fpPlayerId === defenseSubTarget
+          ? { ...pair, fpPlayerId: newPlayerId, fpPosition: finalPosition || pair.fpPosition }
+          : pair
+      )
+      setLineup((prev) =>
+        prev.map((entry) => {
+          if (entry.player_id === defenseSubTarget && String(entry.position || '').startsWith('FP:')) {
+            return { ...entry, position: '' }
+          }
+          if (entry.player_id === newPlayerId) {
+            return { ...entry, position: `FP:${finalPosition}` }
+          }
+          return entry
+        })
+      )
+      setDhFpPairs(nextDhFpPairs)
+      persistGameState({ dhFpPairs: nextDhFpPairs })
+    }
+
     if (finalPosition === 'P') setPitcherId(newPlayerId)
-    else if (outgoing?.position === 'P') setPitcherId(null)
+    else if ((outgoing?.position || outgoingFpPair?.fpPosition || fallbackFpPosition) === 'P') setPitcherId(null)
 
     setPanel('main')
     setDefenseSubTarget(null)
@@ -1406,19 +1439,22 @@ function RecordContent() {
               <>
                 <p className="text-xs text-gray-600 mb-2">交代する守備位置を選択してください</p>
                 <div className="flex flex-col gap-2">
-                  {starters.map((s, i) => {
-                    const p = lineup.find((l) => l.player_id === s.playerId)
+                  {POSITIONS.map((pos) => {
+                    const defenderId = getDefenderIdByPosition(pos)
+                    if (!defenderId) return null
+                    const p = lineup.find((l) => l.player_id === defenderId)
+                    const isFp = dhFpPairs.some((pair) => pair.fpPlayerId === defenderId && pair.fpPosition === pos)
                     return (
                       <button
-                        key={s.playerId}
+                        key={`${pos}-${defenderId}`}
                         onClick={() => {
-                          setDefenseSubTarget(i)
-                          setDefenseSubPosition(s.position || '')
+                          setDefenseSubTarget(defenderId)
+                          setDefenseSubPosition(pos)
                         }}
                         className="flex items-center justify-between px-4 py-3 bg-white border-2 border-gray-200 rounded-lg text-sm"
                       >
-                        <span>{s.position || '-'}: {p?.players?.name}</span>
-                        <span className="text-xs text-gray-400">守備</span>
+                        <span>{pos}: {p?.players?.name}</span>
+                        <span className="text-xs text-gray-400">{isFp ? 'FP' : '守備'}</span>
                       </button>
                     )
                   })}
