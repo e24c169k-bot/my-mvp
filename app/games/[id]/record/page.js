@@ -361,54 +361,77 @@ function RecordContent() {
   function forceAdvanceOnWalk(baseRunners, batterId) {
     const nextRunners = { ...baseRunners }
     let runsScored = 0
+    const scoredRunnerIds = []
 
     if (nextRunners['1塁']) {
       if (nextRunners['2塁']) {
-        if (nextRunners['3塁']) runsScored += 1
+        if (nextRunners['3塁']) {
+          runsScored += 1
+          scoredRunnerIds.push(nextRunners['3塁'])
+        }
         nextRunners['3塁'] = nextRunners['2塁']
       }
       nextRunners['2塁'] = nextRunners['1塁']
     }
     nextRunners['1塁'] = batterId
 
-    return { nextRunners, runsScored }
+    return { nextRunners, runsScored, scoredRunnerIds }
   }
 
   function placeBatterWithCarry(baseRunners, batterId, destinationBase) {
     const nextRunners = { '1塁': null, '2塁': null, '3塁': null }
     let runsScored = 0
+    const scoredRunnerIds = []
     const r1 = baseRunners['1塁']
     const r2 = baseRunners['2塁']
     const r3 = baseRunners['3塁']
 
     if (destinationBase === '1塁') {
       // Single: force advance one base where needed.
-      if (r3) runsScored += 1
+      if (r3) {
+        runsScored += 1
+        scoredRunnerIds.push(r3)
+      }
       nextRunners['3塁'] = r2 || null
       nextRunners['2塁'] = r1 || null
       nextRunners['1塁'] = batterId
-      return { nextRunners, runsScored }
+      return { nextRunners, runsScored, scoredRunnerIds }
     }
 
     if (destinationBase === '2塁') {
       // Double: 1st runner must advance to 3rd unless out handling is applied separately.
-      if (r3) runsScored += 1
-      if (r2) runsScored += 1
+      if (r3) {
+        runsScored += 1
+        scoredRunnerIds.push(r3)
+      }
+      if (r2) {
+        runsScored += 1
+        scoredRunnerIds.push(r2)
+      }
       nextRunners['3塁'] = r1 || null
       nextRunners['2塁'] = batterId
-      return { nextRunners, runsScored }
+      return { nextRunners, runsScored, scoredRunnerIds }
     }
 
     if (destinationBase === '3塁') {
       // Triple: all existing runners score.
-      if (r1) runsScored += 1
-      if (r2) runsScored += 1
-      if (r3) runsScored += 1
+      if (r1) {
+        runsScored += 1
+        scoredRunnerIds.push(r1)
+      }
+      if (r2) {
+        runsScored += 1
+        scoredRunnerIds.push(r2)
+      }
+      if (r3) {
+        runsScored += 1
+        scoredRunnerIds.push(r3)
+      }
       nextRunners['3塁'] = batterId
-      return { nextRunners, runsScored }
+      return { nextRunners, runsScored, scoredRunnerIds }
     }
 
-    return { nextRunners, runsScored }
+    return { nextRunners, runsScored, scoredRunnerIds }
   }
 
   const activePlayerIds = new Set(starters.map((s) => s.playerId))
@@ -756,6 +779,29 @@ function RecordContent() {
     return data?.id || null
   }
 
+  async function saveRunnerScores(pitchId, runnerIds, reason, action) {
+    if (!pitchId || !teamId || !runnerIds || runnerIds.length === 0) return
+    for (const runnerId of runnerIds) {
+      const { data, error } = await supabase
+        .from('runner_advances')
+        .insert({
+          pitch_id: pitchId,
+          team_id: teamId,
+          runner_id: runnerId,
+          from_base: null,
+          to_base: '本塁',
+          reason: reason || 'その他'
+        })
+        .select('id')
+        .single()
+      if (error) {
+        setErrorMsg(error.message)
+        return
+      }
+      if (data?.id && action?.advanceIds) action.advanceIds.push(data.id)
+    }
+  }
+
   function nextBatter() {
     const nextIndex = isOurOffense ? batterIndex + 1 : batterIndex
     if (isOurOffense) setBatterIndex(nextIndex)
@@ -804,7 +850,8 @@ function RecordContent() {
     const action = {
       before: snapshotState(),
       pitchIds: [],
-      paIds: []
+      paIds: [],
+      advanceIds: []
     }
     setSelectedPitch(pitch)
     setErrorMsg('')
@@ -855,7 +902,7 @@ function RecordContent() {
         if (paId) action.paIds.push(paId)
         const batterRunnerId = isOurOffense ? batter?.playerId : createOpponentRunnerId()
         setActiveBatterRunnerId(batterRunnerId || '')
-        const { nextRunners, runsScored } = forceAdvanceOnWalk(runners, batterRunnerId)
+        const { nextRunners, runsScored, scoredRunnerIds } = forceAdvanceOnWalk(runners, batterRunnerId)
         const nextIndex = nextBatter()
         const nextScore = isOurOffense ? scoreUs + runsScored : scoreThem + runsScored
         setRunners(nextRunners)
@@ -869,6 +916,7 @@ function RecordContent() {
           strikes: 0,
           batterIndex: nextIndex
         })
+        await saveRunnerScores(pitchId, scoredRunnerIds, '四球', action)
       } else {
         setBalls(newB)
         const pitchId = await savePitch(pitch, null, null)
@@ -887,7 +935,7 @@ function RecordContent() {
       if (paId) action.paIds.push(paId)
       const batterRunnerId = isOurOffense ? batter?.playerId : createOpponentRunnerId()
       setActiveBatterRunnerId(batterRunnerId || '')
-      const { nextRunners, runsScored } = forceAdvanceOnWalk(runners, batterRunnerId)
+      const { nextRunners, runsScored, scoredRunnerIds } = forceAdvanceOnWalk(runners, batterRunnerId)
       const nextScore = isOurOffense ? scoreUs + runsScored : scoreThem + runsScored
       const nextIndex = nextBatter()
       setRunners(nextRunners)
@@ -901,6 +949,7 @@ function RecordContent() {
         strikes: 0,
         batterIndex: nextIndex
       })
+      await saveRunnerScores(pitchId, scoredRunnerIds, pitch, action)
       setPanel('error')
       pushUndoAction(action)
       return
@@ -955,7 +1004,8 @@ function RecordContent() {
     const action = {
       before: snapshotState(),
       pitchIds: [],
-      paIds: []
+      paIds: [],
+      advanceIds: []
     }
     const pitchId = await savePitch('ヒッティング', finalRes, null)
     if (pitchId) action.pitchIds.push(pitchId)
@@ -979,21 +1029,26 @@ function RecordContent() {
       setActiveBatterRunnerId(batterRunnerId || '')
       let nextScore = isOurOffense ? scoreUs : scoreThem
       const isHomeRun = res === 'HR' || res === '走HR'
+      let scoredRunnerIds = []
       if (res === 'ヒット') {
         const placed = placeBatterWithCarry(runners, batterRunnerId, '1塁')
         nextRunners = placed.nextRunners
         nextScore += placed.runsScored
+        scoredRunnerIds = placed.scoredRunnerIds || []
       } else if (res === '2B' || res === 'エン2B') {
         const placed = placeBatterWithCarry(runners, batterRunnerId, '2塁')
         nextRunners = placed.nextRunners
         nextScore += placed.runsScored
+        scoredRunnerIds = placed.scoredRunnerIds || []
       } else if (res === '3B') {
         const placed = placeBatterWithCarry(runners, batterRunnerId, '3塁')
         nextRunners = placed.nextRunners
         nextScore += placed.runsScored
+        scoredRunnerIds = placed.scoredRunnerIds || []
       }
       else if (res === 'HR' || res === '走HR') {
         nextScore += 1 + Object.values(runners).filter((r) => r).length
+        scoredRunnerIds = [...Object.values(runners).filter((r) => r), batterRunnerId].filter(Boolean)
         nextRunners = { '1塁': null, '2塁': null, '3塁': null }
       }
       const nextIndex = nextBatter()
@@ -1008,6 +1063,7 @@ function RecordContent() {
         strikes: 0,
         batterIndex: nextIndex
       })
+      await saveRunnerScores(pitchId, scoredRunnerIds, res, action)
 
       // Home runs are auto-finalized; no extra advance/score prompt needed.
       if (isHomeRun) {
